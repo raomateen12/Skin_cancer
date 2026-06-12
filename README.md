@@ -1,0 +1,61 @@
+# Skin Cancer Diagnosis — Fair Medical AI
+
+A research project for skin lesion classification using deep learning on the HAM10000 dataset.
+Built as part of a study on model explainability and fairness in medical AI.
+
+## What it does
+
+- Classifies dermoscopic images into 7 skin disease categories using ResNet50 and EfficientNet
+- Uses Grad-CAM to visualize what the model focuses on for each prediction
+- Runs a fairness audit to check performance across demographic groups
+- Includes a RAG-based Q&A system for querying medical literature
+- Has a Streamlit dashboard for interactive use
+
+## Modules
+
+- `src/dataset.py` — HAM10000 dataset class and transforms
+- `src/model.py` — ResNet50 and EfficientNet model definitions
+- `src/train.py` — training loop with early stopping and class weighting
+- `src/evaluate.py` — test set evaluation and metrics
+- `src/explainability.py` — Grad-CAM and EigenCAM (in progress)
+- `src/fairness.py` — group metrics and SHAP analysis (in progress)
+- `src/rag.py` — PDF loading, FAISS index, and Q&A (in progress)
+- `app/app.py` — Streamlit dashboard
+
+## Dataset
+
+HAM10000 — not included in this repo.
+Download it from Kaggle: `kmader/skin-cancer-mnist-ham10000`
+
+Place your `kaggle.json` at `C:\Users\<username>\.kaggle\kaggle.json` (Windows) or `~/.kaggle/kaggle.json` (Linux/Colab), then run:
+
+```bash
+python -m src.download_kaggle_dataset
+python -m src.prepare_data
+python -m src.check_dataloaders
+```
+
+## Training (run on Google Colab T4)
+
+Open `notebooks/02_cnn_training.ipynb` in Colab, or run:
+
+```bash
+pip install -r requirements.txt
+python -m src.train
+python -m src.evaluate
+```
+
+For local UI only:
+```bash
+pip install -r requirements-local.txt
+streamlit run app/app.py
+```
+
+## Status
+
+- [x] Project structure and dataset pipeline
+- [x] Training pipeline (ResNet50)
+- [ ] Training run on Colab — results to be added
+- [ ] XAI, Fairness, RAG — in progress
+
+*Results and metrics will be added here after training experiments.*
