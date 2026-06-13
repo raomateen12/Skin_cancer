@@ -1,5 +1,5 @@
 """
-Download the HAM10000 dataset from Kaggle using the official Kaggle CLI.
+Download the HAM10000 dataset from Kaggle using the Kaggle CLI.
 
 Prerequisites:
   - Place your kaggle.json at:
@@ -22,9 +22,9 @@ def check_credentials():
     if not KAGGLE_JSON.exists():
         print("\n[ERROR] kaggle.json not found.")
         print("  Place your Kaggle API credentials at:")
-        print(f"  Windows: C:\\Users\\<WindowsUserName>\\.kaggle\\kaggle.json")
-        print(f"  Linux/Colab: ~/.kaggle/kaggle.json")
-        print("\n  You can download kaggle.json from:")
+        print("  Windows: C:\\Users\\<WindowsUserName>\\.kaggle\\kaggle.json")
+        print("  Linux/Colab: ~/.kaggle/kaggle.json")
+        print("\n  Download kaggle.json from:")
         print("  https://www.kaggle.com/settings -> API -> Create New Token")
         return False
     return True
@@ -41,10 +41,10 @@ def download_dataset():
     print(f"Destination: {RAW_DATA_DIR.resolve()}")
     print("This may take several minutes (~3 GB)...\n")
 
+    # Use kaggle CLI directly (works on both Windows and Colab)
     result = subprocess.run(
         [
-            sys.executable, "-m", "kaggle",
-            "datasets", "download",
+            "kaggle", "datasets", "download",
             "-d", DATASET_NAME,
             "-p", str(RAW_DATA_DIR),
             "--unzip",

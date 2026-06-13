@@ -74,7 +74,14 @@ def main():
     model.load_state_dict(ckpt["model_state_dict"])
     model.to(device)
     model.eval()
-    print(f"Loaded checkpoint from epoch {ckpt.get('epoch', '?')}")
+    saved_epoch = ckpt.get("epoch", "?")
+    saved_f1    = ckpt.get("val_weighted_f1", ckpt.get("val_f1", None))  # backward compat
+    saved_acc   = ckpt.get("val_accuracy", None)
+    print(f"Loaded checkpoint from epoch {saved_epoch}")
+    if saved_f1 is not None:
+        print(f"  Saved val_weighted_f1 : {saved_f1:.4f}")
+    if saved_acc is not None:
+        print(f"  Saved val_accuracy    : {saved_acc:.4f}")
 
     # Test dataloader
     test_dataset = HAM10000Dataset(TEST_CSV, image_size=224, transform=get_eval_transforms(224))

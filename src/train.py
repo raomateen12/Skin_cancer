@@ -174,7 +174,7 @@ def main():
     curves_path     = "results/resnet50_training_curves.png"
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": [], "val_f1": []}
-    best_val_loss = float("inf")
+    best_val_f1 = 0.0
     epochs_no_improve = 0
 
     print(f"\nStarting training: {num_epochs} epochs, batch_size={batch_size}, lr={lr}")
@@ -198,19 +198,20 @@ def main():
         print(f"  train_loss={train_loss:.4f}  train_acc={train_acc:.4f}")
         print(f"  val_loss={val_loss:.4f}    val_acc={val_acc:.4f}  val_f1={val_f1:.4f}")
 
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # Save best model based on highest val weighted F1
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
             epochs_no_improve = 0
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": val_loss,
-                "val_f1": val_f1,
+                "val_accuracy": val_acc,
+                "val_weighted_f1": val_f1,
                 "class_to_idx": class_to_idx,
             }, checkpoint_path)
-            print(f"  ✓ Best model saved (val_loss={val_loss:.4f})")
+            print(f"  ✓ Best model saved (val_f1={val_f1:.4f})")
         else:
             epochs_no_improve += 1
             print(f"  No improvement for {epochs_no_improve}/{patience} epochs")

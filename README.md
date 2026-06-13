@@ -51,11 +51,26 @@ pip install -r requirements-local.txt
 streamlit run app/app.py
 ```
 
+## Results
+
+### ResNet50 baseline (Colab T4, first run)
+
+| metric | value |
+|---|---|
+| test accuracy | 0.8154 |
+| weighted precision | 0.8579 |
+| weighted recall | 0.8154 |
+| weighted F1 | 0.8279 |
+
+Trained on HAM10000 (10015 images, 7 classes). Checkpoint from epoch 5 with early stopping.
+This is just a first baseline — next step is to compare with EfficientNet-B0 and run XAI/fairness analysis.
+
 ## Status
 
 - [x] Project structure and dataset pipeline
-- [x] Training pipeline (ResNet50)
-- [ ] Training run on Colab — results to be added
-- [ ] XAI, Fairness, RAG — in progress
-
-*Results and metrics will be added here after training experiments.*
+- [x] ResNet50 training pipeline
+- [x] ResNet50 first run on Colab — baseline results above
+- [ ] EfficientNet-B0 training and comparison
+- [ ] XAI (Grad-CAM) — in progress
+- [ ] Fairness analysis — in progress
+- [ ] RAG pipeline — in progress
