@@ -100,5 +100,39 @@ python -m src.explainability --model_name efficientnet_b0 --num_per_class 5
 - [x] EfficientNet-B0 training + evaluation (best model)
 - [x] Model comparison pipeline
 - [x] Grad-CAM & EigenCAM explainability (run on Colab)
-- [ ] Fairness analysis — in progress
-- [ ] RAG pipeline — in progress
+- [x] Fairness analysis and metadata SHAP
+- [x] RAG chatbot for educational Q&A (English & Roman Urdu)
+
+## Fairness & SHAP
+
+Analyzes model performance across sex, age, and localization groups.
+Uses SHAP on metadata features to find factors associated with correct predictions.
+
+```bash
+python -m src.fairness --model_name efficientnet_b0
+```
+
+## RAG Chatbot (Educational Q&A)
+
+A Retrieval-Augmented Generation module for skin disease Q&A using medical PDFs.
+
+- **Storage:** PDFs are placed in `data/medical_pdfs/` (not committed).
+- **Index:** Vector store saved in `vectorstore/faiss_index/` (not committed).
+- **Languages:** Supports English and Roman Urdu answers.
+- **Citations:** Provides source filename and page numbers.
+- **Disclaimer:** Educational information only; not a medical diagnosis.
+
+### Commands
+
+1. **Build FAISS Index:**
+   ```bash
+   python -m src.rag --build_index
+   ```
+
+2. **Ask Questions:**
+   ```bash
+   # English
+   python -m src.rag --ask "What are common warning signs of melanoma?"
+   # Roman Urdu
+   python -m src.rag --ask "melanoma ki warning signs kya hain?" --language roman_urdu
+   ```

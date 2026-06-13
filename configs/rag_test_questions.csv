@@ -1,0 +1,9 @@
+question,language,expected_topic
+"What are the early warning signs of melanoma?",english,melanoma_symptoms
+"How can I distinguish between a normal mole and skin cancer?",english,diagnosis_difference
+"What is the ABCDE rule for skin examination?",english,abcde_rule
+"What are common treatments for basal cell carcinoma?",english,treatment_options
+"How does sun exposure affect the risk of skin cancer?",english,prevention_sun_exposure
+"melanoma ki shuruati alamat kya hain?",roman_urdu,melanoma_symptoms
+"skin cancer se bachne ke liye kya karna chahiye?",roman_urdu,prevention
+"kya har til (mole) khatarnak hota hai?",roman_urdu,moles_safety

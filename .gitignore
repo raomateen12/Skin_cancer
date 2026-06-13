@@ -25,13 +25,23 @@ data/processed/*
 # Generated results — not committed
 results/gradcam_samples/
 results/fairness/
+results/rag_eval/
 results/*.png
 results/*.json
 results/*.txt
 results/*.csv
 !results/README.md
+!results/rag_eval/.gitkeep
 
 # FAISS index files
-faiss_index/
+vectorstore/faiss_index/
+!vectorstore/faiss_index/.gitkeep
 *.faiss
 *.index
+*.pkl
+
+# RAG specific
+data/medical_pdfs/*
+!data/medical_pdfs/.gitkeep
+.env
+.env.local
