@@ -22,7 +22,8 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
-# Results (generated after training)
+# Generated results — not committed
+results/gradcam_samples/
 results/*.png
 results/*.json
 results/*.txt

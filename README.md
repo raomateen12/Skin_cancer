@@ -58,9 +58,7 @@ pip install -r requirements-local.txt
 streamlit run app/app.py
 ```
 
-## Results
-
-### ResNet50 baseline (Colab T4, first run)
+### ResNet50 baseline (Colab T4)
 
 | metric | value |
 |---|---|
@@ -69,15 +67,38 @@ streamlit run app/app.py
 | weighted recall | 0.8154 |
 | weighted F1 | 0.8279 |
 
-Trained on HAM10000 (10015 images, 7 classes). Checkpoint from epoch 5 with early stopping.
-This is the baseline — EfficientNet-B0 training is next, and results will be compared in `results/model_comparison.csv`.
+### EfficientNet-B0 (Colab T4)
+
+| metric | value |
+|---|---|
+| test accuracy | 0.8603 |
+| weighted precision | 0.8689 |
+| weighted recall | 0.8603 |
+| weighted F1 | 0.8667 |
+
+EfficientNet-B0 outperforms ResNet50 on all metrics and is used as the default model for explainability.
+Full comparison saved to `results/model_comparison.csv` (generated after training, not committed).
+
+## Explainability
+
+Grad-CAM and EigenCAM are used to visualize which regions of a skin lesion image the model focuses on.
+
+- Default model for explainability: **EfficientNet-B0** (best test F1: 0.8667)
+- Generates 3-panel figures per test sample: Original | Grad-CAM | EigenCAM
+- Up to 5 samples per class (~35 total)
+- Generated heatmaps are **not committed** to GitHub
+
+To run on Colab:
+```bash
+python -m src.explainability --model_name efficientnet_b0 --num_per_class 5
+```
 
 ## Status
 
 - [x] Project structure and dataset pipeline
-- [x] ResNet50 training pipeline + baseline run on Colab
-- [x] EfficientNet-B0 support added (training pending)
-- [ ] EfficientNet-B0 Colab run — results to be added
-- [ ] XAI (Grad-CAM) — in progress
+- [x] ResNet50 training + evaluation (baseline)
+- [x] EfficientNet-B0 training + evaluation (best model)
+- [x] Model comparison pipeline
+- [x] Grad-CAM & EigenCAM explainability (run on Colab)
 - [ ] Fairness analysis — in progress
 - [ ] RAG pipeline — in progress
