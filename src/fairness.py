@@ -197,11 +197,57 @@ def run_shap_analysis(pred_df, model_name, out_dir):
     explainer = shap.TreeExplainer(clf)
     shap_values = explainer.shap_values(X)
 
-    # shap_values is a list [class0, class1]; use class 1 (correct=1)
-    sv = shap_values[1] if isinstance(shap_values, list) else shap_values
-    mean_abs_shap = np.abs(sv).mean(axis=0)
+    # Handle different shap_values formats robustly
+    if isinstance(shap_values, list):
+        # If it's a list, it's usually [class0, class1] for binary
+        shap_array = np.array(shap_values[1]) if len(shap_values) > 1 else np.array(shap_values[0])
+    elif isinstance(shap_values, np.ndarray):
+        if shap_values.ndim == 3:
+            # If 3D (samples, features, classes), select class 1 if possible
+            if shap_values.shape[2] > 1:
+                shap_array = shap_values[:, :, 1]
+            else:
+                shap_array = shap_values[:, :, 0]
+        else:
+            shap_array = shap_values
+    else:
+        # Fallback for Explanation objects or other types
+        try:
+            if hasattr(shap_values, "values"):
+                shap_array = shap_values.values
+            else:
+                shap_array = np.array(shap_values)
+        except:
+            shap_array = shap_values
+
+    # Ensure shap_array is 2D (samples, features)
+    if hasattr(shap_array, "ndim") and shap_array.ndim > 2:
+        # If still > 2D, we try to select the first class or flatten
+        if shap_array.ndim == 3 and shap_array.shape[2] > 1:
+            shap_array = shap_array[:, :, 1]
+        else:
+            shap_array = shap_array.reshape(shap_array.shape[0], -1)
+
+    # Compute mean absolute SHAP values
+    try:
+        mean_abs_shap = np.abs(shap_array).mean(axis=0)
+    except Exception as e:
+        print(f"  Warning: Failed to compute mean_abs_shap: {e}")
+        return []
+
+    # Ensure mean_abs_shap is 1D and length matches feature_names
+    if hasattr(mean_abs_shap, "flatten"):
+        mean_abs_shap = mean_abs_shap.flatten()
+
+    feature_names = X.columns.tolist()
+    if len(mean_abs_shap) != len(feature_names):
+        print(f"  Warning: SHAP values length mismatch. Expected {len(feature_names)}, got {len(mean_abs_shap)}.")
+        min_len = min(len(mean_abs_shap), len(feature_names))
+        mean_abs_shap = mean_abs_shap[:min_len]
+        feature_names = feature_names[:min_len]
+
     feature_importance = pd.DataFrame({
-        "feature": X.columns.tolist(),
+        "feature": feature_names,
         "mean_abs_shap": mean_abs_shap,
     }).sort_values("mean_abs_shap", ascending=False)
 
@@ -210,17 +256,20 @@ def run_shap_analysis(pred_df, model_name, out_dir):
     feature_importance.to_csv(fi_path, index=False)
     print(f"  Feature importance CSV → {fi_path}")
 
-    # Save SHAP summary plot
-    shap_path = out_dir / f"{model_name}_metadata_shap_summary.png"
-    fig, ax = plt.subplots(figsize=(8, max(4, len(feature_importance) * 0.3)))
-    top_n = feature_importance.head(15)
-    ax.barh(top_n["feature"][::-1], top_n["mean_abs_shap"][::-1], color="darkorange")
-    ax.set_xlabel("Mean |SHAP value|")
-    ax.set_title(f"{model_name} — Metadata SHAP (association with correct prediction)")
-    plt.tight_layout()
-    plt.savefig(shap_path, dpi=120)
-    plt.close()
-    print(f"  SHAP summary plot → {shap_path}")
+    # Save SHAP summary plot with error handling
+    try:
+        shap_path = out_dir / f"{model_name}_metadata_shap_summary.png"
+        fig, ax = plt.subplots(figsize=(8, max(4, len(feature_importance) * 0.3)))
+        top_n = feature_importance.head(15)
+        ax.barh(top_n["feature"][::-1], top_n["mean_abs_shap"][::-1], color="darkorange")
+        ax.set_xlabel("Mean |SHAP value|")
+        ax.set_title(f"{model_name} — Metadata SHAP (association with correct prediction)")
+        plt.tight_layout()
+        plt.savefig(shap_path, dpi=120)
+        plt.close()
+        print(f"  SHAP summary plot → {shap_path}")
+    except Exception as e:
+        print(f"  Warning: Could not save SHAP summary plot: {e}")
 
     return feature_importance["feature"].head(5).tolist()
 
