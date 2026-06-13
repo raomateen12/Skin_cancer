@@ -24,6 +24,7 @@ data/processed/*
 
 # Generated results — not committed
 results/gradcam_samples/
+results/fairness/
 results/*.png
 results/*.json
 results/*.txt
