@@ -1,12 +1,14 @@
 """
-Train ResNet50 on HAM10000 (designed to run on Google Colab T4 GPU).
+Train ResNet50 or EfficientNet-B0 on HAM10000 (run on Google Colab T4 GPU).
 Reads config from configs/config.yaml.
-Saves best checkpoint, training history CSV, and loss/accuracy curves.
+Saves best checkpoint, training history CSV, and training curves.
+
+Usage:
+    python -m src.train --model_name resnet50
+    python -m src.train --model_name efficientnet_b0
 """
 
-import os
-import json
-import csv
+import argparse
 from pathlib import Path
 
 import yaml
@@ -20,16 +22,25 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import f1_score
 from tqdm import tqdm
 import matplotlib
-matplotlib.use("Agg")  # no display needed on Colab/server
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from src.dataset import HAM10000Dataset, get_train_transforms, get_eval_transforms, class_to_idx
-from src.model import get_resnet50
+from src.model import get_resnet50, get_efficientnet_b0
 
 
 def load_config(path="configs/config.yaml"):
     with open(path) as f:
         return yaml.safe_load(f)
+
+
+def get_model(model_name, num_classes):
+    if model_name == "resnet50":
+        return get_resnet50(num_classes)
+    elif model_name == "efficientnet_b0":
+        return get_efficientnet_b0(num_classes)
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
 
 
 def compute_class_weights(train_csv, num_classes):
@@ -44,7 +55,7 @@ def compute_class_weights(train_csv, num_classes):
 def collate_fn(batch):
     images = torch.stack([item[0] for item in batch])
     labels = torch.tensor([item[1] for item in batch])
-    return images, labels  # metadata not needed during training
+    return images, labels
 
 
 def train_one_epoch(model, loader, criterion, optimizer, device, use_amp, scaler):
@@ -98,24 +109,24 @@ def eval_one_epoch(model, loader, criterion, device):
     return total_loss / total, correct / total, val_f1
 
 
-def save_curves(history, save_path):
+def save_curves(history, save_path, model_name):
     epochs = range(1, len(history["train_loss"]) + 1)
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 
     axes[0].plot(epochs, history["train_loss"], label="Train")
     axes[0].plot(epochs, history["val_loss"], label="Val")
-    axes[0].set_title("Loss")
+    axes[0].set_title(f"{model_name} — Loss")
     axes[0].set_xlabel("Epoch")
     axes[0].legend()
 
     axes[1].plot(epochs, history["train_acc"], label="Train")
     axes[1].plot(epochs, history["val_acc"], label="Val")
-    axes[1].set_title("Accuracy")
+    axes[1].set_title(f"{model_name} — Accuracy")
     axes[1].set_xlabel("Epoch")
     axes[1].legend()
 
     axes[2].plot(epochs, history["val_f1"], color="green", label="Val F1")
-    axes[2].set_title("Validation Weighted F1")
+    axes[2].set_title(f"{model_name} — Validation Weighted F1")
     axes[2].set_xlabel("Epoch")
     axes[2].legend()
 
@@ -126,19 +137,27 @@ def save_curves(history, save_path):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Train skin lesion classifier on HAM10000")
+    parser.add_argument("--model_name", type=str, default="resnet50",
+                        choices=["resnet50", "efficientnet_b0"],
+                        help="Model architecture to train")
+    args = parser.parse_args()
+    model_name = args.model_name
+
     cfg = load_config()
-    seed = cfg.get("seed", 42)
-    image_size = cfg.get("image_size", 224)
-    batch_size = cfg.get("batch_size", 32)
-    num_epochs = cfg.get("num_epochs", 20)
-    lr = cfg.get("learning_rate", 1e-4)
+    seed        = cfg.get("seed", 42)
+    image_size  = cfg.get("image_size", 224)
+    batch_size  = cfg.get("batch_size", 32)
+    num_epochs  = cfg.get("num_epochs", 20)
+    lr          = cfg.get("learning_rate", 1e-4)
     num_workers = cfg.get("num_workers", 2)
-    patience = 5
+    patience    = 5
 
     torch.manual_seed(seed)
     np.random.seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Model : {model_name}")
     print(f"Device: {device}")
     if device.type == "cuda":
         print(f"  GPU: {torch.cuda.get_device_name(0)}")
@@ -158,20 +177,19 @@ def main():
                               num_workers=num_workers, pin_memory=(device.type == "cuda"),
                               collate_fn=collate_fn)
 
-    # Class-weighted loss for imbalanced HAM10000
     class_weights = compute_class_weights(train_csv, num_classes).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    model = get_resnet50(num_classes).to(device)
+    model = get_model(model_name, num_classes).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
     scaler = GradScaler() if use_amp else None
 
     Path("checkpoints").mkdir(exist_ok=True)
     Path("results").mkdir(exist_ok=True)
-    checkpoint_path = "checkpoints/best_resnet50.pth"
-    history_path    = "results/resnet50_training_history.csv"
-    curves_path     = "results/resnet50_training_curves.png"
+    checkpoint_path = f"checkpoints/best_{model_name}.pth"
+    history_path    = f"results/{model_name}_training_history.csv"
+    curves_path     = f"results/{model_name}_training_curves.png"
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": [], "val_f1": []}
     best_val_f1 = 0.0
@@ -204,6 +222,7 @@ def main():
             epochs_no_improve = 0
             torch.save({
                 "epoch": epoch,
+                "model_name": model_name,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "val_loss": val_loss,
@@ -211,7 +230,7 @@ def main():
                 "val_weighted_f1": val_f1,
                 "class_to_idx": class_to_idx,
             }, checkpoint_path)
-            print(f"  ✓ Best model saved (val_f1={val_f1:.4f})")
+            print(f"  ✓ Best model saved (val_f1={val_f1:.4f}) → {checkpoint_path}")
         else:
             epochs_no_improve += 1
             print(f"  No improvement for {epochs_no_improve}/{patience} epochs")
@@ -219,11 +238,10 @@ def main():
                 print("  Early stopping triggered.")
                 break
 
-    # Save training history CSV
     pd.DataFrame(history).to_csv(history_path, index=False)
     print(f"\nTraining history saved → {history_path}")
 
-    save_curves(history, curves_path)
+    save_curves(history, curves_path, model_name)
     print("Training complete.")
 
 

@@ -17,6 +17,7 @@ Built as part of a study on model explainability and fairness in medical AI.
 - `src/model.py` — ResNet50 and EfficientNet model definitions
 - `src/train.py` — training loop with early stopping and class weighting
 - `src/evaluate.py` — test set evaluation and metrics
+- `src/compare_models.py` — comparison table and bar chart across models
 - `src/explainability.py` — Grad-CAM and EigenCAM (in progress)
 - `src/fairness.py` — group metrics and SHAP analysis (in progress)
 - `src/rag.py` — PDF loading, FAISS index, and Q&A (in progress)
@@ -41,8 +42,14 @@ Open `notebooks/02_cnn_training.ipynb` in Colab, or run:
 
 ```bash
 pip install -r requirements.txt
-python -m src.train
-python -m src.evaluate
+# Train ResNet50 (baseline)
+python -m src.train --model_name resnet50
+python -m src.evaluate --model_name resnet50
+# Train EfficientNet-B0 (comparison)
+python -m src.train --model_name efficientnet_b0
+python -m src.evaluate --model_name efficientnet_b0
+# Compare results
+python -m src.compare_models
 ```
 
 For local UI only:
@@ -63,14 +70,14 @@ streamlit run app/app.py
 | weighted F1 | 0.8279 |
 
 Trained on HAM10000 (10015 images, 7 classes). Checkpoint from epoch 5 with early stopping.
-This is just a first baseline — next step is to compare with EfficientNet-B0 and run XAI/fairness analysis.
+This is the baseline — EfficientNet-B0 training is next, and results will be compared in `results/model_comparison.csv`.
 
 ## Status
 
 - [x] Project structure and dataset pipeline
-- [x] ResNet50 training pipeline
-- [x] ResNet50 first run on Colab — baseline results above
-- [ ] EfficientNet-B0 training and comparison
+- [x] ResNet50 training pipeline + baseline run on Colab
+- [x] EfficientNet-B0 support added (training pending)
+- [ ] EfficientNet-B0 Colab run — results to be added
 - [ ] XAI (Grad-CAM) — in progress
 - [ ] Fairness analysis — in progress
 - [ ] RAG pipeline — in progress
