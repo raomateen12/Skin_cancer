@@ -13,15 +13,9 @@ import os
 import re
 from pathlib import Path
 
-import numpy as np
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-
 # Medical Disclaimer
 DISCLAIMER = (
-    "\n[MEDICAL DISCLAIMER]: This assistant provides educational information only. "
+    "This assistant provides educational information only. "
     "It is not a medical diagnosis. For urgent symptoms or suspicious lesions, "
     "please consult a qualified dermatologist or doctor immediately."
 )
@@ -43,11 +37,7 @@ def detect_language(text, requested_lang="auto"):
     return "english"
 
 def translate_to_roman_urdu(text):
-    """
-    Very basic rule-based conversion for specific phrases.
-    In a real scenario, this would use a translation LLM.
-    Since we avoid paid APIs/heavy local LLMs, we provide a functional extractive answer.
-    """
+    """Basic rule-based conversion for specific phrases."""
     replacements = {
         "Source": "Zariya",
         "Page": "Safha",
@@ -58,8 +48,120 @@ def translate_to_roman_urdu(text):
         text = text.replace(eng, urd)
     return text
 
+def answer_question(question, language="auto", index_dir="vectorstore/faiss_index", top_k=4):
+    """
+    Core RAG function to be used by both CLI and Streamlit.
+    Returns a dict with answer, sources, and detected language.
+    """
+    # Lazy imports to keep the module lightweight for simple function imports
+    try:
+        from langchain_community.vectorstores import FAISS
+        from langchain_huggingface import HuggingFaceEmbeddings
+    except ImportError as e:
+        return {
+            "answer": f"Required libraries missing: {e}",
+            "sources": [],
+            "language": "english",
+            "error": True
+        }
+    
+    index_path = Path(index_dir)
+    if not (index_path / "index.faiss").exists():
+        return {
+            "answer": f"FAISS index not found at {index_dir}. Please build the index first.",
+            "sources": [],
+            "language": "english",
+            "error": True
+        }
+
+    # Load index
+    try:
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = FAISS.load_local(str(index_path), embeddings, allow_dangerous_deserialization=True)
+    except Exception as e:
+        return {
+            "answer": f"Error loading index: {e}",
+            "sources": [],
+            "language": "english",
+            "error": True
+        }
+
+    # Retrieval
+    results = vectorstore.similarity_search_with_score(question, k=top_k)
+    lang = detect_language(question, language)
+    
+    if not results or results[0][1] > 1.5:  # Distance threshold check
+        msg = "I could not find enough relevant information in the provided medical documents to answer this safely."
+        if lang == "roman_urdu":
+            msg = translate_to_roman_urdu(msg)
+        return {
+            "answer": msg,
+            "sources": [],
+            "language": lang
+        }
+
+    # Format answer
+    intro = "Based on the medical documents retrieved:"
+    if lang == "roman_urdu":
+        intro = translate_to_roman_urdu(intro)
+    
+    answer_text = f"{intro}\n\n"
+    sources = []
+    seen_content = set()
+    
+    for doc, score in results:
+        content = doc.page_content.strip().replace("\n", " ")
+        if content[:100] not in seen_content:
+            answer_text += f"- {content[:400]}...\n\n"
+            seen_content.add(content[:100])
+        
+        source_name = Path(doc.metadata.get("source", "unknown")).name
+        page_num = doc.metadata.get("page", "?")
+        sources.append({"source": source_name, "page": page_num})
+
+    return {
+        "answer": answer_text,
+        "sources": sources,
+        "language": lang
+    }
+
+def ask_question(query, index_dir, top_k=4, language="auto"):
+    """CLI wrapper for answer_question."""
+    result = answer_question(query, language=language, index_dir=index_dir, top_k=top_k)
+    
+    if "error" in result:
+        print(f"\n[ERROR] {result['answer']}")
+        return
+
+    print(f"\nAnswer ({result['language']}):")
+    print(result['answer'])
+    
+    if result['sources']:
+        print("\nSources used:")
+        seen_sources = set()
+        for s in result['sources']:
+            source_str = f"{s['source']} (Page {s['page']})"
+            if source_str not in seen_sources:
+                if result['language'] == "roman_urdu":
+                    print(f"  {translate_to_roman_urdu(source_str)}")
+                else:
+                    print(f"  {source_str}")
+                seen_sources.add(source_str)
+                
+    print("\n[MEDICAL DISCLAIMER]: " + DISCLAIMER)
+
 def build_index(docs_dir, index_dir):
     """Load PDFs, chunk text, and save FAISS index."""
+    # Lazy imports
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_community.document_loaders import PyPDFLoader
+        from langchain_community.vectorstores import FAISS
+        from langchain_huggingface import HuggingFaceEmbeddings
+    except ImportError as e:
+        print(f"[ERROR] Required libraries missing: {e}")
+        return
+
     docs_path = Path(docs_dir)
     if not docs_path.exists():
         print(f"[ERROR] Documents directory not found: {docs_dir}")
@@ -103,62 +205,6 @@ def build_index(docs_dir, index_dir):
     index_path.mkdir(parents=True, exist_ok=True)
     vectorstore.save_local(str(index_path))
     print(f"FAISS index saved to {index_dir}")
-
-def ask_question(query, index_dir, top_k=4, language="auto"):
-    """Retrieve chunks and generate an extractive answer."""
-    index_path = Path(index_dir)
-    if not (index_path / "index.faiss").exists():
-        print(f"[ERROR] FAISS index not found at {index_dir}. Run --build_index first.")
-        return
-
-    # Load index
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    vectorstore = FAISS.load_local(str(index_path), embeddings, allow_dangerous_deserialization=True)
-
-    # Retrieval
-    results = vectorstore.similarity_search_with_score(query, k=top_k)
-    
-    if not results or results[0][1] > 1.5:  # Distance threshold check
-        msg = "I could not find enough relevant information in the provided medical documents to answer this safely."
-        lang = detect_language(query, language)
-        if lang == "roman_urdu":
-            msg = translate_to_roman_urdu(msg)
-        print(f"\nAnswer: {msg}")
-        print(DISCLAIMER)
-        return
-
-    # Simple extractive summarization (combine top chunks)
-    # In a full RAG, we'd pass these to an LLM. Here we provide the best snippets.
-    lang = detect_language(query, language)
-    
-    intro = "Based on the medical documents retrieved:"
-    if lang == "roman_urdu":
-        intro = translate_to_roman_urdu(intro)
-    
-    print(f"\nAnswer ({lang}):")
-    print(intro)
-    
-    sources = []
-    seen_content = set()
-    
-    for doc, score in results:
-        content = doc.page_content.strip().replace("\n", " ")
-        if content[:100] not in seen_content:
-            print(f"- {content[:400]}...")
-            seen_content.add(content[:100])
-        
-        source_name = Path(doc.metadata.get("source", "unknown")).name
-        page_num = doc.metadata.get("page", "?")
-        sources.append(f"{source_name} (Page {page_num})")
-
-    print("\nSources used:")
-    for s in sorted(list(set(sources))):
-        if lang == "roman_urdu":
-            print(f"  {translate_to_roman_urdu(s)}")
-        else:
-            print(f"  {s}")
-            
-    print(DISCLAIMER)
 
 def main():
     parser = argparse.ArgumentParser(description="Medical RAG Chatbot")

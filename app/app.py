@@ -434,43 +434,31 @@ def rag_assistant_page():
                     st.markdown(prompt)
 
                 with st.chat_message("assistant"):
-                    # Using existing RAG logic
-                    from src.rag import HuggingFaceEmbeddings, FAISS
-                    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-                    vectorstore = FAISS.load_local("vectorstore/faiss_index", embeddings, allow_dangerous_deserialization=True)
+                    # Using refactored RAG logic
+                    from src.rag import answer_question
                     
-                    results = vectorstore.similarity_search_with_score(prompt, k=3)
-                    detected_lang = detect_language(prompt, lang)
+                    with st.spinner("Searching medical documents..."):
+                        result = answer_question(prompt, language=lang)
                     
-                    if not results or results[0][1] > 1.5:
-                        answer = "I could not find enough relevant information in the provided medical documents to answer this safely."
-                        if detected_lang == "roman_urdu":
-                            answer = translate_to_roman_urdu(answer)
+                    if "error" in result:
+                        st.error(result["answer"])
                     else:
-                        intro = "Based on the medical documents retrieved:"
-                        if detected_lang == "roman_urdu":
-                            intro = translate_to_roman_urdu(intro)
+                        st.markdown(result["answer"])
                         
-                        answer = f"{intro}\n\n"
-                        sources = []
-                        for doc, score in results:
-                            content = doc.page_content.strip().replace("\n", " ")
-                            answer += f"- {content[:250]}...\n\n"
-                            source_name = Path(doc.metadata.get("source", "unknown")).name
-                            page_num = doc.metadata.get("page", "?")
-                            sources.append(f"{source_name} (Page {page_num})")
-                        
-                        source_header = "\n\n**Sources**"
-                        if detected_lang == "roman_urdu":
-                            source_header = translate_to_roman_urdu(source_header)
-                        
-                        answer += source_header
-                        for s in sorted(list(set(sources))):
-                            answer += f"\n- {translate_to_roman_urdu(s) if detected_lang == 'roman_urdu' else s}"
+                        if result["sources"]:
+                            with st.expander("View Sources"):
+                                seen_sources = set()
+                                for s in result["sources"]:
+                                    source_str = f"{s['source']} (Page {s['page']})"
+                                    if source_str not in seen_sources:
+                                        if result["language"] == "roman_urdu":
+                                            st.write(f"- {translate_to_roman_urdu(source_str)}")
+                                        else:
+                                            st.write(f"- {source_str}")
+                                        seen_sources.add(source_str)
                     
-                    st.markdown(answer)
-                    st.caption(DISCLAIMER)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    st.caption(f"[MEDICAL DISCLAIMER]: {DISCLAIMER}")
+                    st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         empty_state("RAG Index Missing", "The medical assistant requires a document index.", "python -m src.rag --build_index")
