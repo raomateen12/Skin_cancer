@@ -45,3 +45,4 @@ data/medical_pdfs/*
 !data/medical_pdfs/.gitkeep
 .env
 .env.local
+reference_ui/
