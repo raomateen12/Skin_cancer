@@ -9,7 +9,7 @@ Built as part of a study on model explainability and fairness in medical AI.
 - Uses Grad-CAM to visualize what the model focuses on for each prediction
 - Runs a fairness audit to check performance across demographic groups
 - Includes a RAG-based Q&A system for querying medical literature
-- Has a Streamlit dashboard for interactive use
+
 
 ## Modules
 
