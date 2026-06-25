@@ -23,8 +23,14 @@ export default function AppPage() {
     setActivePanel("result");
   };
 
+  // Clear stale result whenever a new image is chosen
   const handleImageSelected = useCallback((url: string | null) => {
     setUploadedImageUrl(url);
+    if (url) {
+      // New image picked — wipe any previous result so the panel
+      // shows "No analysis yet" instead of a stale error/checkpoint message
+      setResult(null);
+    }
   }, []);
 
   return (

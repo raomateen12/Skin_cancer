@@ -54,6 +54,7 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: U
     setAnalyzing(true);
     setError(null);
     onAnalyzing(true);
+    onResult(null); // clear stale previous result immediately
     try {
       const result = await predictImage(file);
       onResult(result);
