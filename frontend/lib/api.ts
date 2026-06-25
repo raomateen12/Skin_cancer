@@ -27,7 +27,7 @@ export interface HealthStatus {
 
 export interface PredictResult {
   ok?: boolean;
-  available: boolean;
+  available?: boolean;  // optional — backend may omit this; derived below if absent
   // Core result fields
   predicted_class?: string;
   predicted_code?: string;
@@ -111,7 +111,20 @@ export async function predictImage(file: File): Promise<PredictResult | null> {
       }
     }
 
-    return (await res.json()) as PredictResult;
+    const data = (await res.json()) as PredictResult;
+
+    // Normalize `available`: the HF backend returns `ok` but may omit `available`.
+    // Derive it: true if ok !== false AND at least one prediction field is present.
+    const hasPrediction =
+      Boolean(data.predicted_code) ||
+      Boolean(data.predicted_name) ||
+      Boolean(data.predicted_class) ||
+      Boolean(data.predicted_label);
+
+    return {
+      ...data,
+      available: data.available ?? (data.ok !== false && hasPrediction),
+    };
   } catch {
     // Connection refused / backend not running
     return {

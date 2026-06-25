@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 export interface PredictResult {
   ok?: boolean;
-  available: boolean;
+  available?: boolean;  // optional — normalized in api.ts
   // Backend v2 fields
   predicted_code?: string;
   predicted_name?: string;
@@ -80,10 +80,22 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
     );
   }
 
-  // Backend not available or checkpoint missing
-  if (!result.available || result.ok === false) {
+  // Show error/unavailable state only when the backend explicitly signals failure:
+  // ok===false AND (backend is down OR checkpoint is missing).
+  // If available is undefined but prediction fields exist, fall through to results.
+  const hasPrediction =
+    Boolean(result.predicted_code) ||
+    Boolean(result.predicted_name) ||
+    Boolean(result.predicted_class) ||
+    Boolean(result.predicted_label);
+
+  const isFailure =
+    result.ok === false ||
+    (result.available === false && !hasPrediction);
+
+  if (isFailure) {
     const isBackendDown = result.error?.includes("Backend is not running") || result.error?.includes("not running");
-    const isCheckpointMissing = result.missing_path || result.error?.includes("weights") || result.error?.includes("checkpoint");
+    const isCheckpointMissing = Boolean(result.missing_path) || result.error?.includes("weights") || result.error?.includes("checkpoint");
 
     return (
       <div className="space-y-4">
@@ -114,8 +126,12 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
     );
   }
 
-  // Full result
-  const label = result.predicted_label ?? (result.predicted_class ? CLASS_LABELS[result.predicted_class] ?? result.predicted_class : "Unknown");
+  // Full result — read predicted_name first (HF backend), fall back to predicted_label / predicted_class lookup
+  const label =
+    result.predicted_name ??
+    result.predicted_label ??
+    (result.predicted_code ? CLASS_LABELS[result.predicted_code] ?? result.predicted_code : null) ??
+    (result.predicted_class ? CLASS_LABELS[result.predicted_class] ?? result.predicted_class : "Unknown");
   const confidence = result.confidence ?? 0;
   const concernLevel = result.concern_level ?? "unknown";
   const nextSteps = result.next_steps ?? [];
@@ -141,37 +157,55 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
         </div>
       </div>
 
-      {/* Top 3 Patterns (Progress Bars) */}
-      {result.top_3 && result.top_3.length > 0 && (
-        <div className="space-y-4 pt-2">
-          <h3 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em]">
-            Pattern matches
-          </h3>
-          <div className="space-y-3.5">
-            {result.top_3.map((item, idx) => {
-              const perc = (item.probability * 100).toFixed(1);
-              return (
-                <div key={item.label} className="space-y-1.5">
-                  <div className="flex justify-between items-center text-[13px]">
-                    <span className={clsx("font-medium", idx === 0 ? "text-[#0F172A]" : "text-[#475569]")}>
-                      {CLASS_LABELS[item.label] ?? item.label}
-                    </span>
-                    <span className={clsx("font-medium", idx === 0 ? "text-[#0B7FEA]" : "text-[#64748B]")}>
-                      {perc}%
-                    </span>
+      {/* Top 3 Patterns (Progress Bars) — handles both backend shapes */}
+      {(() => {
+        // Normalise to a single array regardless of which shape the backend returned
+        const items: Array<{ displayName: string; pct: number }> =
+          result.top_3 && result.top_3.length > 0
+            ? result.top_3.map((i) => ({
+                displayName: CLASS_LABELS[i.label] ?? i.label,
+                pct: i.probability * 100,
+              }))
+            : result.top_predictions && result.top_predictions.length > 0
+            ? result.top_predictions.map((i) => ({
+                displayName: i.name ?? CLASS_LABELS[i.code] ?? i.code,
+                pct: i.confidence * 100,
+              }))
+            : [];
+
+        if (items.length === 0) return null;
+
+        return (
+          <div className="space-y-4 pt-2">
+            <h3 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em]">
+              Pattern matches
+            </h3>
+            <div className="space-y-3.5">
+              {items.map((item, idx) => {
+                const perc = item.pct.toFixed(1);
+                return (
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[13px]">
+                      <span className={clsx("font-medium", idx === 0 ? "text-[#0F172A]" : "text-[#475569]")}>
+                        {item.displayName}
+                      </span>
+                      <span className={clsx("font-medium", idx === 0 ? "text-[#0B7FEA]" : "text-[#64748B]")}>
+                        {perc}%
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
+                      <div
+                        className={clsx("h-full rounded-full transition-all duration-1000 ease-out", idx === 0 ? "bg-[#0B7FEA]" : "bg-[#CBD5E1]")}
+                        style={{ width: `${perc}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden">
-                    <div 
-                      className={clsx("h-full rounded-full transition-all duration-1000 ease-out", idx === 0 ? "bg-[#0B7FEA]" : "bg-[#CBD5E1]")} 
-                      style={{ width: `${perc}%` }} 
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Next steps */}
       {nextSteps.length > 0 && (
