@@ -107,7 +107,7 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: U
             <img
               src={preview}
               alt="Uploaded skin lesion preview"
-              className="w-full h-48 object-contain rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]"
+              className="w-full h-40 sm:h-48 object-contain rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]"
             />
             <button
               onClick={(e) => { e.stopPropagation(); clearFile(); }}
@@ -117,10 +117,10 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: U
               <X size={16} className="text-[#64748B]" />
             </button>
             <div className="mt-5 flex items-center justify-between w-full px-2 border-t border-[#E2E8F0] pt-3">
-              <span className="text-[13px] font-medium text-[#0F172A] truncate max-w-[200px]">
+              <span className="text-[13px] font-medium text-[#0F172A] truncate max-w-[140px] sm:max-w-[200px]">
                 {file?.name}
               </span>
-              <span className="text-[11px] font-medium tracking-wide uppercase text-[#10B981]">Ready to analyze</span>
+              <span className="text-[10px] sm:text-[11px] font-medium tracking-wide uppercase text-[#10B981]">Ready to analyze</span>
             </div>
           </div>
         ) : (

@@ -40,7 +40,7 @@ const aiLimitations = [
 
 export default function GuidePanel() {
   return (
-    <div className="space-y-12 animate-fade-in">
+    <div className="space-y-8 md:space-y-12 animate-fade-in">
       {/* Header */}
       <div>
         <h2 className="font-display text-2xl font-semibold text-[#0F172A] tracking-tight">Patient Guide</h2>
@@ -53,7 +53,7 @@ export default function GuidePanel() {
       <div className="grid lg:grid-cols-[1fr_300px] gap-8">
         
         {/* Left Column: Core Educational Content */}
-        <div className="space-y-12">
+        <div className="space-y-8 md:space-y-12">
           
           {/* ABCDE Section */}
           <section className="space-y-4">

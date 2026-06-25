@@ -34,26 +34,36 @@ export default function AppPage() {
   }, []);
 
   return (
-    <>
-      {/* Sidebar */}
+    <div className="flex flex-col md:flex-row h-[100dvh] bg-[#F8FAFC] w-full overflow-hidden">
+      {/* Sidebar / Bottom Nav */}
       <Sidebar activePanel={activePanel} onPanelChange={(p) => setActivePanel(p as Panel)} />
 
       {/* Main workspace */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-[#F8FAFC]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC] relative">
         {/* Top bar */}
-        <header className="h-16 bg-white flex items-center justify-between px-8 flex-shrink-0 border-b border-[#E2E8F0] z-10">
-          <div className="flex items-center gap-3">
+        <header className="h-14 md:h-16 bg-white flex items-center justify-between px-4 md:px-8 flex-shrink-0 border-b border-[#E2E8F0] z-10 sticky top-0">
+          <div className="flex items-center gap-2.5">
+            {/* Mobile Logo */}
+            <div className="md:hidden w-7 h-7 rounded-[8px] bg-[#0F172A] flex items-center justify-center shadow-sm">
+              <span className="text-white text-[10px] font-bold tracking-wider">DL</span>
+            </div>
             <h1 className="font-display text-[15px] font-medium text-[#0F172A] capitalize tracking-tight">
               {activePanel.replace("-", " ")}
             </h1>
-            <span className="text-[#CBD5E1] font-light">|</span>
-            <span className="text-[13px] font-medium text-[#64748B]">DermaLens Workspace</span>
+            <span className="hidden md:inline text-[#CBD5E1] font-light">|</span>
+            <span className="hidden md:inline text-[13px] font-medium text-[#64748B]">DermaLens Workspace</span>
           </div>
           <SafetyNote compact />
         </header>
 
         {/* Panel content */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div
+          className={`flex-1 w-full ${
+            activePanel === "ask-assistant"
+              ? "flex flex-col min-h-0 relative"
+              : "overflow-y-auto p-4 sm:p-6 md:p-8 pb-[84px] md:pb-8"
+          }`}
+        >
           {activePanel === "analyze" && (
             <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
               <div className="space-y-2">
@@ -166,7 +176,7 @@ export default function AppPage() {
           )}
 
           {activePanel === "ask-assistant" && (
-            <div className="max-w-3xl mx-auto h-full animate-fade-in">
+            <div className="w-full h-full animate-fade-in flex flex-col min-h-0">
               <AssistantChat />
             </div>
           )}
@@ -178,6 +188,6 @@ export default function AppPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

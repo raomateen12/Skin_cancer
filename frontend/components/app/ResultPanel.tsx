@@ -146,14 +146,16 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
         <h3 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em]">
           Primary Finding
         </h3>
-        <div className="flex items-center justify-between p-5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl shadow-sm">
-          <div className="space-y-1.5">
-            <p className="font-display text-2xl font-medium text-[#0F172A] tracking-tight">{label}</p>
-            <p className="text-[13px] text-[#64748B]">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 sm:p-5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl shadow-sm">
+          <div className="space-y-1.5 w-full">
+            <p className="font-display text-xl sm:text-2xl font-medium text-[#0F172A] tracking-tight break-words pr-2">{label}</p>
+            <p className="text-[12px] sm:text-[13px] text-[#64748B]">
               Confidence level: <span className="font-semibold text-[#0F172A]">{confidenceRating}</span> ({(confidence * 100).toFixed(1)}%)
             </p>
           </div>
-          <StatusBadge level={concernLevel} />
+          <div className="flex-shrink-0">
+            <StatusBadge level={concernLevel} />
+          </div>
         </div>
       </div>
 

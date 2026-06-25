@@ -27,6 +27,11 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "DermaLens AI" }],
   robots: "index, follow",
+  icons: {
+    icon: "/title_photo.jpg",
+    shortcut: "/title_photo.jpg",
+    apple: "/title_photo.jpg",
+  },
   openGraph: {
     title: "DermaLens AI — Clinical Skin Analysis Support",
     description:

@@ -33,10 +33,10 @@ const capabilities = [
 
 export default function CapabilitiesSection() {
   return (
-    <section id="capabilities" className="py-32 bg-[#F8FAFC]">
+    <section id="capabilities" className="py-16 md:py-32 bg-[#F8FAFC]">
       <div className="max-w-7xl mx-auto px-6">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-24 space-y-6">
+        <div className="text-center max-w-3xl mx-auto mb-12 md:mb-24 space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-[#E2E8F0] rounded-full shadow-sm">
             <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-[0.15em]">
               Product capabilities
@@ -57,7 +57,7 @@ export default function CapabilitiesSection() {
             return (
               <div
                 key={cap.title}
-                className="group p-10 bg-white border border-[#0B7FEA]/40 rounded-[2rem] shadow-[0_4px_24px_rgba(15,23,42,0.02)] hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)] hover:border-transparent transition-all duration-300 flex flex-col sm:flex-row gap-6 sm:items-start"
+                className="group p-6 sm:p-10 bg-white border border-[#0B7FEA]/40 rounded-[2rem] shadow-[0_4px_24px_rgba(15,23,42,0.02)] hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)] hover:border-transparent transition-all duration-300 flex flex-col sm:flex-row gap-6 sm:items-start"
               >
                 {/* Icon */}
                 <div

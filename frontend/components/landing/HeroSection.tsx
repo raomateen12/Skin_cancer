@@ -20,13 +20,13 @@ export default function HeroSection() {
       {/* Bottom-left gradient blob */}
       <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-to-tr from-[#16B8C7]/6 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative max-w-7xl mx-auto px-6 pt-24 pb-16 w-full">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+      <div className="relative max-w-7xl mx-auto px-6 pt-36 md:pt-40 pb-16 w-full">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left column */}
           <div className="space-y-8 animate-fade-up">
             {/* Headline */}
             <div className="space-y-4">
-              <h1 className="text-5xl xl:text-6xl font-bold text-[#0F172A] leading-[1.08] tracking-tight">
+              <h1 className="text-4xl md:text-5xl xl:text-6xl font-bold text-[#0F172A] leading-[1.08] tracking-tight">
                 AI-assisted skin{" "}
                 <span className="text-gradient">lesion analysis,</span>{" "}
                 built for safer clinical insight.
@@ -38,11 +38,11 @@ export default function HeroSection() {
             </div>
 
             {/* CTA buttons */}
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
               <Link
                 href="/app"
                 id="hero-get-started"
-                className="group inline-flex items-center gap-2 px-7 py-3.5 bg-[#0B7FEA] hover:bg-[#0970d4] text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
+                className="group inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-[#0B7FEA] hover:bg-[#0970d4] text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
               >
                 Get Started
                 <ArrowRight
@@ -53,7 +53,7 @@ export default function HeroSection() {
               <a
                 href="#how-it-works"
                 id="hero-learn-more"
-                className="inline-flex items-center gap-2 px-7 py-3.5 bg-white hover:bg-[#F5F7FB] border border-[#E5EAF0] text-[#0F172A] font-semibold rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
+                className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white hover:bg-[#F5F7FB] border border-[#E5EAF0] text-[#0F172A] font-semibold rounded-xl shadow-sm hover:shadow-md transition-all duration-200"
               >
                 Learn how it works
                 <ChevronDown size={16} className="text-[#475569]" />

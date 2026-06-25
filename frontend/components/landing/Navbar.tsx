@@ -100,7 +100,7 @@ export default function Navbar() {
       {/* Ticker */}
       <div className="w-full bg-[#0B7FEA]/10 border-b border-[#E5EAF0] flex items-center justify-center h-8">
         <div className="text-[12px] font-medium text-[#0B7FEA] tracking-wider uppercase text-center">
-          Build with 💜 By Mateen
+          Build with 💜 By <a href="https://www.linkedin.com/in/mateen-ahmad-saeed-8a0574252/?originalSubdomain=pk" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0970d4] transition-colors">Mateen</a>
         </div>
       </div>
     </header>

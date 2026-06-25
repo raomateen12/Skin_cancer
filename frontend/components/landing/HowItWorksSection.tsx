@@ -29,10 +29,10 @@ const steps = [
 
 export default function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-32 bg-white relative">
+    <section id="how-it-works" className="py-16 md:py-32 bg-white relative">
       <div className="max-w-7xl mx-auto px-6">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-24 space-y-6">
+        <div className="text-center max-w-3xl mx-auto mb-12 md:mb-24 space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-full">
             <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-[0.15em]">
               How it works
@@ -53,7 +53,7 @@ export default function HowItWorksSection() {
             return (
               <div
                 key={step.number}
-                className="relative group p-10 bg-[#F8FAFC] border border-[#0B7FEA]/40 rounded-[2rem] hover:bg-white hover:border-transparent hover:shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-300"
+                className="relative group p-6 sm:p-10 bg-[#F8FAFC] border border-[#0B7FEA]/40 rounded-[2rem] hover:bg-white hover:border-transparent hover:shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-300"
               >
                 {/* Connector line between cards */}
                 {i < steps.length - 1 && (

@@ -37,13 +37,13 @@ const urgentSigns = [
 
 export default function SafetySection() {
   return (
-    <section id="safety" className="py-32 bg-white relative overflow-hidden">
+    <section id="safety" className="py-16 md:py-32 bg-white relative overflow-hidden">
       {/* Very subtle top border gradient */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#E2E8F0] to-transparent" />
       
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
-        <div className="max-w-3xl mx-auto text-center mb-24 space-y-6 animate-fade-up">
+        <div className="max-w-3xl mx-auto text-center mb-12 md:mb-24 space-y-6 animate-fade-up">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-full">
             <span className="text-[11px] font-semibold text-[#64748B] tracking-[0.15em] uppercase">
               Safety & Trust
@@ -56,7 +56,7 @@ export default function SafetySection() {
         </div>
 
         {/* 2x2 Grid of Core Principles */}
-        <div className="grid md:grid-cols-2 gap-x-12 gap-y-16 mb-24 max-w-5xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-x-12 gap-y-12 md:gap-y-16 mb-16 md:mb-24 max-w-5xl mx-auto">
           {trustPoints.map((point) => {
             const Icon = point.icon;
             return (
@@ -78,7 +78,7 @@ export default function SafetySection() {
         </div>
 
         {/* Bottom Clinical Notice Box */}
-        <div className="max-w-5xl mx-auto bg-[#F8FAFC] rounded-[2rem] p-10 md:p-14 border border-[#0B7FEA]/40 shadow-[0_4px_24px_rgba(15,23,42,0.02)] hover:border-transparent hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
+        <div className="max-w-5xl mx-auto bg-[#F8FAFC] rounded-[2rem] p-6 sm:p-10 md:p-14 border border-[#0B7FEA]/40 shadow-[0_4px_24px_rgba(15,23,42,0.02)] hover:border-transparent hover:shadow-[0_8px_32px_rgba(15,23,42,0.06)] transition-all duration-300">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
             {/* Left side: Important Notice */}
             <div className="space-y-6">

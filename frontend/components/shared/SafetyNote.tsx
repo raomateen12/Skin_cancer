@@ -7,10 +7,11 @@ interface SafetyNoteProps {
 export default function SafetyNote({ compact = false }: SafetyNoteProps) {
   if (compact) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#FFFBEB] border border-[#FEF08A] rounded-lg">
+      <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-[#FFFBEB] border border-[#FEF08A] rounded-lg max-w-[200px] sm:max-w-none">
         <AlertTriangle size={12} className="text-[#F59E0B] flex-shrink-0" />
-        <p className="text-[11px] text-[#92400E] font-medium">
-          Educational support only. Not a substitute for professional medical advice.
+        <p className="text-[10px] md:text-[11px] text-[#92400E] font-medium leading-tight line-clamp-2 sm:line-clamp-1">
+          <span className="sm:hidden">Educational support only</span>
+          <span className="hidden sm:inline">Educational support only. Not a substitute for professional medical advice.</span>
         </p>
       </div>
     );
