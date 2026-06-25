@@ -4,7 +4,8 @@ __pycache__/
 .venv/
 .env
 .ipynb_checkpoints/
-
+LOCAL_TESTING.md
+PROJECT_REPORT_SUMMARY.txt
 # Kaggle credentials - never commit
 kaggle.json
 .kaggle/

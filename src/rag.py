@@ -74,6 +74,29 @@ def answer_question(question, language="auto", index_dir="vectorstore/faiss_inde
             "error": True
         }
 
+    # 1. Conversational Bypass (Greetings & Acknowledgements)
+    clean_q = question.strip().lower().replace(".", "").replace("!", "")
+    conversational_responses = {
+        "ok": "Okay! Let me know if you have any questions about skin health.",
+        "okay": "Okay! Let me know if you have any questions about skin health.",
+        "acha": "Acha! Agar aapko skin ke baare mein koi sawal ho, toh zaroor poochein.",
+        "theek hai": "Theek hai! Agar aapko skin ke baare mein koi sawal ho, toh zaroor poochein.",
+        "hi": "Hello! I am the DermaLens AI Assistant. How can I help you with your skin health today?",
+        "hello": "Hello! I am the DermaLens AI Assistant. How can I help you with your skin health today?",
+        "hey": "Hello! I am the DermaLens AI Assistant. How can I help you with your skin health today?",
+        "thanks": "You're welcome! Feel free to ask if you need more information.",
+        "thank you": "You're welcome! Feel free to ask if you need more information.",
+        "shukriya": "Khush aamdeed! Agar mazeed kuch poochna ho toh zaroor poochein."
+    }
+    
+    if clean_q in conversational_responses:
+        lang = detect_language(question, language)
+        return {
+            "answer": conversational_responses[clean_q],
+            "sources": [],
+            "language": lang
+        }
+
     # Load index
     try:
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -91,9 +114,23 @@ def answer_question(question, language="auto", index_dir="vectorstore/faiss_inde
     lang = detect_language(question, language)
     
     if not results or results[0][1] > 1.5:  # Distance threshold check
-        msg = "I could not find enough relevant information in the provided medical documents to answer this safely."
         if lang == "roman_urdu":
-            msg = translate_to_roman_urdu(msg)
+            msg = (
+                "Mujhe is sawal ka jawab medical documents mein nahi mila. "
+                "Yeh assistant skin health aur dermatology ke baray mein sawaal answer karta hai — "
+                "jaise melanoma, moles, lesion changes, ya skin cancer ke warning signs."
+            )
+        else:
+            msg = (
+                "This assistant is focused on skin health and dermatology topics. "
+                "I couldn't find relevant information for that question in the connected medical documents.\n\n"
+                "Try asking about:\n"
+                "• Warning signs of melanoma or skin cancer\n"
+                "• The ABCDE rule for moles\n"
+                "• Types of skin lesions (basal cell carcinoma, actinic keratosis, etc.)\n"
+                "• When to see a dermatologist\n"
+                "• Sun protection and skin health"
+            )
         return {
             "answer": msg,
             "sources": [],
