@@ -18,8 +18,16 @@ import io
 import os
 import json
 import sys
+import logging
 from pathlib import Path
 from typing import Optional
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logger = logging.getLogger("dermalens")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 # ── Add project root to path so src.* imports work ──────────────────────────
 ROOT = Path(__file__).parent.parent
@@ -228,15 +236,133 @@ def _check_rag_dependencies() -> bool:
         return False
 
 
+def _validate_skin_image(image_bytes: bytes) -> dict:
+    """
+    Lightweight heuristic gate to check if the uploaded image is plausibly
+    a close-up skin/lesion photo rather than a screenshot, document, or object photo.
+
+    Returns:
+      {"valid": True}  — image passes, proceed with prediction
+      {"valid": False, "reason": str, "guidance": str}  — reject with user message
+      {"valid": True, "warning": str}  — uncertain, allow but warn
+    """
+    try:
+        import numpy as np
+        from PIL import Image as PILImage
+
+        pil_img = PILImage.open(io.BytesIO(image_bytes)).convert("RGB")
+        w, h = pil_img.size
+
+        # ── 1. Extreme aspect ratio check ────────────────────────────────────
+        aspect = max(w, h) / max(min(w, h), 1)
+        if aspect > 3.5:
+            logger.info("Validation REJECT: extreme aspect ratio %.2f", aspect)
+            return {
+                "valid": False,
+                "reason": "This image does not appear to be a close-up skin lesion photo (extreme aspect ratio detected).",
+                "guidance": "Please upload a clear, close-up photo of the skin area or lesion with roughly equal width and height.",
+            }
+
+        # ── 2. Minimum resolution check ──────────────────────────────────────
+        if w < 50 or h < 50:
+            logger.info("Validation REJECT: image too small (%dx%d)", w, h)
+            return {
+                "valid": False,
+                "reason": "The uploaded image is too small to analyze meaningfully.",
+                "guidance": "Please upload a higher-resolution, close-up photo of the skin lesion (at least 50x50 pixels).",
+            }
+
+        thumb = pil_img.resize((224, 224))
+        img_np = np.array(thumb, dtype=np.float32)
+
+        # ── 3. Screenshot/UI detection — uniform color block ratio ───────────
+        r, g, b = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2]
+        near_white = ((r > 230) & (g > 230) & (b > 230)).sum()
+        near_black = ((r < 25) & (g < 25) & (b < 25)).sum()
+        total_pixels = 224 * 224
+        white_ratio = near_white / total_pixels
+        black_ratio = near_black / total_pixels
+
+        if white_ratio > 0.65:
+            logger.info("Validation REJECT: %.1f%% near-white pixels (likely screenshot/doc)", white_ratio * 100)
+            return {
+                "valid": False,
+                "reason": "This image appears to be a screenshot, document, or webpage rather than a skin photo.",
+                "guidance": "Please upload a direct photo of the skin area or lesion in good lighting.",
+            }
+        if black_ratio > 0.60:
+            logger.info("Validation REJECT: %.1f%% near-black pixels (likely dark UI/video)", black_ratio * 100)
+            return {
+                "valid": False,
+                "reason": "This image appears to be a dark-background screenshot or video frame, not a skin photo.",
+                "guidance": "Please upload a clear, well-lit close-up photo of the skin area or lesion.",
+            }
+
+        # ── 4. Skin-tone pixel ratio check (YCrCb space) ─────────────────────
+        img_uint8 = img_np.clip(0, 255).astype(np.uint8)
+        try:
+            import cv2
+            ycrcb = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2YCrCb)
+            Y, Cr, Cb = ycrcb[:, :, 0], ycrcb[:, :, 1], ycrcb[:, :, 2]
+            skin_mask = (
+                (Y > 60) & (Y < 255) &
+                (Cr > 120) & (Cr < 185) &
+                (Cb > 60) & (Cb < 135)
+            )
+            skin_ratio = skin_mask.sum() / total_pixels
+            logger.info("Skin-tone pixel ratio: %.3f", skin_ratio)
+
+            if skin_ratio < 0.04:
+                logger.info("Validation REJECT: very low skin-tone ratio %.3f", skin_ratio)
+                return {
+                    "valid": False,
+                    "reason": "This image does not appear to contain skin tones. It may be an object, logo, or unrelated photo.",
+                    "guidance": "Please upload a clear, close-up photo of a skin area or lesion in good lighting.",
+                }
+        except ImportError:
+            logger.warning("OpenCV not available — skipping skin-tone pixel check")
+            skin_ratio = 0.5
+
+        # ── 5. Global color variance check ───────────────────────────────────
+        global_std = float(img_np.std())
+        logger.info("Global pixel std: %.2f", global_std)
+        if global_std < 8.0:
+            logger.info("Validation REJECT: near-flat image (std=%.2f)", global_std)
+            return {
+                "valid": False,
+                "reason": "The image appears to be nearly uniform in color and does not resemble a skin lesion photo.",
+                "guidance": "Please upload a clear, close-up photo of the skin area or lesion.",
+            }
+
+        # ── 6. Uncertain — low skin ratio → warn but allow ───────────────────
+        if skin_ratio < 0.12:
+            logger.info("Validation WARN: low skin-tone ratio %.3f — allowing with warning", skin_ratio)
+            return {
+                "valid": True,
+                "warning": (
+                    "Image quality or skin-lesion relevance is uncertain. "
+                    "For best results, please use a clear, close-up photo of the skin area or lesion."
+                ),
+            }
+
+        logger.info("Validation PASS: skin_ratio=%.3f white=%.3f std=%.2f", skin_ratio, white_ratio, global_std)
+        return {"valid": True}
+
+    except Exception as exc:
+        logger.warning("Image validation exception (%s: %s) — allowing prediction", type(exc).__name__, exc)
+        return {"valid": True}
+
+
 def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
     """
     Generate Grad-CAM and EigenCAM overlays for the predicted class.
     Returns a dict:
       {
         "available": True,
-        "images": [original_b64, gradcam_b64, eigencam_b64]
+        "images": {"original": b64, "gradcam": b64, "eigencam": b64},
+        "images_list": [orig_b64, gradcam_b64, eigencam_b64]  # legacy compat
       }
-    Falls back to {"available": False, "images": []} if grad-cam libs missing.
+    Falls back to {"available": False} if grad-cam libs missing or error.
     """
     try:
         import base64
@@ -248,16 +374,16 @@ def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
         from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
         if _model is None:
-            return {"available": False, "images": []}
+            logger.warning("XAI: model not loaded, skipping")
+            return {"available": False, "error": "Model not loaded"}
 
-        # Target layer: last features block of EfficientNet-B0
+        logger.info("XAI: generating Grad-CAM and EigenCAM for class index %d", predicted_idx)
+
         target_layers = [_model.features[-1]]  # type: ignore[attr-defined]
 
-        # Load and resize original image
         pil_img = PILImage.open(io.BytesIO(image_bytes)).convert("RGB").resize((224, 224))
         img_np = np.array(pil_img, dtype=np.float32) / 255.0
 
-        # Build normalized tensor
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         tensor = torch.tensor((img_np - mean) / std).permute(2, 0, 1).unsqueeze(0).float()
@@ -266,9 +392,11 @@ def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
 
         with GradCAM(model=_model, target_layers=target_layers) as cam:  # type: ignore[arg-type]
             gradcam_map = cam(input_tensor=tensor, targets=targets)[0]
+        logger.info("XAI: Grad-CAM generated successfully")
 
         with EigenCAM(model=_model, target_layers=target_layers) as cam:  # type: ignore[arg-type]
             eigencam_map = cam(input_tensor=tensor, targets=targets)[0]
+        logger.info("XAI: EigenCAM generated successfully")
 
         gradcam_overlay  = show_cam_on_image(img_np, gradcam_map,  use_rgb=True)
         eigencam_overlay = show_cam_on_image(img_np, eigencam_map, use_rgb=True)
@@ -278,26 +406,28 @@ def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
             PILImage.fromarray(arr).save(buf, format="PNG")
             return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
-        # Also encode the original resized image for the frontend
         orig_buf = io.BytesIO()
         pil_img.save(orig_buf, format="PNG")
         orig_b64 = "data:image/png;base64," + base64.b64encode(orig_buf.getvalue()).decode()
+        gradcam_b64 = to_b64(gradcam_overlay)
+        eigencam_b64 = to_b64(eigencam_overlay)
 
         return {
             "available": True,
-            "images": [
-                orig_b64,
-                to_b64(gradcam_overlay),
-                to_b64(eigencam_overlay),
-            ],
+            "images": {
+                "original": orig_b64,
+                "gradcam": gradcam_b64,
+                "eigencam": eigencam_b64,
+            },
+            "images_list": [orig_b64, gradcam_b64, eigencam_b64],
         }
 
-    except ImportError:
-        # pytorch-grad-cam not installed — silent graceful fallback
-        return {"available": False, "images": []}
-    except Exception:
-        # Any other error — don't crash the prediction
-        return {"available": False, "images": []}
+    except ImportError as exc:
+        logger.warning("XAI: pytorch-grad-cam not installed (%s) — skipping", exc)
+        return {"available": False, "error": f"ImportError: {exc}"}
+    except Exception as exc:
+        logger.error("XAI: unexpected error (%s: %s)", type(exc).__name__, exc, exc_info=True)
+        return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 # ── Request/Response models ──────────────────────────────────────────────────
@@ -352,7 +482,9 @@ async def predict(file: UploadFile = File(...)):
     """
     Accept a skin lesion image and return an AI-assisted educational classification.
 
-    Returns { ok: false, error: ..., missing_path: ... } if model is unavailable.
+    Runs a lightweight heuristic validation gate first to reject obvious non-skin images.
+    Returns { ok: false, rejected: true } for invalid images.
+    Returns { ok: false, available: false } if model unavailable.
     Never returns a fake result as a real one.
     """
     checkpoint_path = _find_checkpoint()
@@ -361,6 +493,7 @@ async def predict(file: UploadFile = File(...)):
         return {
             "ok": False,
             "available": False,
+            "rejected": False,
             "error": "Model weights are not available in this environment.",
             "missing_path": str(CHECKPOINT_CANDIDATES[0].relative_to(ROOT)),
         }
@@ -370,6 +503,7 @@ async def predict(file: UploadFile = File(...)):
         return {
             "ok": False,
             "available": False,
+            "rejected": False,
             "error": "Model checkpoint could not be loaded. The file may be corrupt or incompatible.",
             "missing_path": str(checkpoint_path.relative_to(ROOT)),
         }
@@ -379,6 +513,30 @@ async def predict(file: UploadFile = File(...)):
         from PIL import Image
 
         contents = await file.read()
+
+        # ── Step 1: Image validation gate ────────────────────────────────────
+        validation = _validate_skin_image(contents)
+        if not validation["valid"]:
+            logger.info("Image rejected: %s", validation.get("reason", "unknown"))
+            return {
+                "ok": False,
+                "available": False,
+                "rejected": True,
+                "rejection_reason": validation.get(
+                    "reason",
+                    "This image does not appear to be a close-up skin lesion image."
+                ),
+                "guidance": validation.get(
+                    "guidance",
+                    "Please upload a clear, close-up image of the skin area or lesion in good lighting."
+                ),
+                "gradcam_available": False,
+                "gradcam_images": None,
+            }
+
+        image_quality_warning: str | None = validation.get("warning")
+
+        # ── Step 2: Run ML inference ──────────────────────────────────────────
         img = Image.open(io.BytesIO(contents)).convert("RGB")
         tensor = _transform(img).unsqueeze(0)  # type: ignore[operator]
 
@@ -404,18 +562,26 @@ async def predict(file: UploadFile = File(...)):
             for i in top3_idx
         ]
 
-        # Keep backward-compatible fields for the frontend ResultPanel
         top_3 = [
             {"label": class_labels.get(i, f"class_{i}"), "probability": round(float(probs[i]), 4)}
             for i in top3_idx
         ]
 
-        # Generate Grad-CAM / EigenCAM overlays
+        logger.info(
+            "Prediction: %s (%s) confidence=%.3f concern=%s",
+            predicted_code, predicted_name, confidence, concern
+        )
+
+        # ── Step 3: Generate Grad-CAM / EigenCAM overlays ────────────────────
         xai = _generate_gradcam(contents, predicted_idx)
+        xai_error: str | None = xai.get("error") if not xai["available"] else None
+        if xai_error:
+            logger.warning("XAI generation failed: %s", xai_error)
 
         return {
             "ok": True,
             "available": True,
+            "rejected": False,
             "predicted_code": predicted_code,
             "predicted_class": predicted_code,
             "predicted_name": predicted_name,
@@ -427,11 +593,15 @@ async def predict(file: UploadFile = File(...)):
             "top_3": top_3,
             "next_steps": NEXT_STEPS.get(concern, []),
             "gradcam_available": xai["available"],
-            "gradcam_images": xai["images"],
+            "gradcam_images": xai.get("images"),
+            "gradcam_images_list": xai.get("images_list"),
+            "xai_error": xai_error,
+            "image_quality_warning": image_quality_warning,
             "disclaimer": DISCLAIMER,
         }
 
     except Exception as exc:
+        logger.error("Prediction error: %s: %s", type(exc).__name__, exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Prediction error: {str(exc)}",
