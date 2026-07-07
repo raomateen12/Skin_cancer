@@ -19,8 +19,12 @@ export default function AppPage() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const handleResult = (r: unknown) => {
-    setResult(r as PredictResult);
-    setActivePanel("result");
+    const result = r as PredictResult;
+    setResult(result);
+    // Don't navigate to result panel for rejected images — keep user on analyze to re-upload
+    if (!result?.rejected) {
+      setActivePanel("result");
+    }
   };
 
   // Clear stale result whenever a new image is chosen
@@ -166,11 +170,19 @@ export default function AppPage() {
               <ExplainPanel
                 result={result}
                 uploadedImageUrl={uploadedImageUrl}
-                gradcamImages={
-                  result?.gradcam_images && result.gradcam_images.length > 0
-                    ? result.gradcam_images
-                    : []
-                }
+                gradcamImages={(() => {
+                  if (!result?.gradcam_available) return [];
+                  // New named dict shape from backend
+                  if (result.gradcam_images && typeof result.gradcam_images === "object" && !Array.isArray(result.gradcam_images)) {
+                    const d = result.gradcam_images as { original: string; gradcam: string; eigencam: string };
+                    return [d.original, d.gradcam, d.eigencam].filter(Boolean);
+                  }
+                  // Legacy flat list compat
+                  if (result.gradcam_images_list && result.gradcam_images_list.length > 0) {
+                    return result.gradcam_images_list;
+                  }
+                  return [];
+                })()}
               />
             </div>
           )}

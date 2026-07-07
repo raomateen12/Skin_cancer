@@ -28,6 +28,10 @@ export interface HealthStatus {
 export interface PredictResult {
   ok?: boolean;
   available?: boolean;  // optional — backend may omit this; derived below if absent
+  // Rejection fields (when image validation fails)
+  rejected?: boolean;
+  rejection_reason?: string;
+  guidance?: string;
   // Core result fields
   predicted_class?: string;
   predicted_code?: string;
@@ -40,9 +44,12 @@ export interface PredictResult {
   // Top predictions (two shapes — backend may return either)
   top_3?: Array<{ label: string; probability: number }>;
   top_predictions?: Array<{ code: string; name: string; confidence: number }>;
-  // Explainability
+  // Explainability — named dict (primary) or flat list (legacy)
   gradcam_available?: boolean;
-  gradcam_images?: string[];
+  gradcam_images?: { original: string; gradcam: string; eigencam: string } | null;
+  gradcam_images_list?: string[];  // legacy flat [orig, gradcam, eigencam]
+  xai_error?: string | null;
+  image_quality_warning?: string | null;
   // Offline / error
   error?: string;
   missing_path?: string;

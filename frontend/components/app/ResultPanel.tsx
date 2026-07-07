@@ -7,6 +7,10 @@ import clsx from "clsx";
 export interface PredictResult {
   ok?: boolean;
   available?: boolean;  // optional — normalized in api.ts
+  // Rejection fields
+  rejected?: boolean;
+  rejection_reason?: string;
+  guidance?: string;
   // Backend v2 fields
   predicted_code?: string;
   predicted_name?: string;
@@ -21,7 +25,10 @@ export interface PredictResult {
   next_steps?: string[];
   // Explainability
   gradcam_available?: boolean;
-  gradcam_images?: string[];
+  gradcam_images?: { original: string; gradcam: string; eigencam: string } | null;
+  gradcam_images_list?: string[];
+  xai_error?: string | null;
+  image_quality_warning?: string | null;
   // Error fields
   error?: string;
   missing_path?: string;
@@ -75,6 +82,33 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
           <div className="w-1.5 h-1.5 rounded-full bg-[#94A3B8]" />
           <span className="text-[11px] text-[#64748B] font-medium">System ready</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Rejected image state ────────────────────────────────────────────────
+  if (result.rejected === true) {
+    return (
+      <div className="space-y-4">
+        <div className="p-8 bg-[#FFFBEB] border border-[#FEF08A] rounded-[1.25rem] flex flex-col items-center gap-4 text-center">
+          <div className="w-12 h-12 rounded-xl bg-white border border-[#FEF08A] shadow-sm flex items-center justify-center">
+            <AlertTriangle size={20} className="text-[#F59E0B]" />
+          </div>
+          <div className="space-y-2">
+            <p className="font-display text-[15px] font-semibold text-[#92400E]">
+              Image not suitable for analysis
+            </p>
+            <p className="text-[13px] text-[#78350F] leading-relaxed max-w-[340px] mx-auto">
+              {result.rejection_reason ?? "This image does not appear to be a close-up skin lesion photo."}
+            </p>
+          </div>
+          {result.guidance && (
+            <div className="flex items-start gap-2.5 px-4 py-3 bg-white border border-[#FDE68A] rounded-xl text-left w-full max-w-sm">
+              <Info size={14} className="text-[#F59E0B] flex-shrink-0 mt-0.5" />
+              <p className="text-[12px] text-[#92400E] leading-relaxed">{result.guidance}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -223,6 +257,16 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Image quality warning */}
+      {result.image_quality_warning && (
+        <div className="flex items-start gap-3 px-5 py-4 bg-[#FFFBEB] border border-[#FEF08A] rounded-xl">
+          <AlertTriangle size={14} className="text-[#F59E0B] flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-[#92400E] leading-relaxed">
+            <strong>Image quality note.</strong> {result.image_quality_warning}
+          </p>
         </div>
       )}
 

@@ -33,8 +33,10 @@ export default function ExplainPanel({
   uploadedImageUrl,
   gradcamImages = [],
 }: ExplainPanelProps) {
-  const hasResult = result && (result.available || result.ok);
+  const isRejected = result?.rejected === true;
+  const hasResult = !isRejected && result && (result.available || result.ok);
   const hasGradcam = gradcamImages.length > 0;
+  const xaiError = result?.xai_error;
   const label =
     result?.predicted_name ??
     result?.predicted_label ??
@@ -62,7 +64,19 @@ export default function ExplainPanel({
             Analysis Recap
           </h3>
         </div>
-        {hasResult && label ? (
+        {isRejected ? (
+          <div className="flex items-start gap-4 py-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FFFBEB] border border-[#FEF08A] flex items-center justify-center flex-shrink-0">
+              <Eye size={20} className="text-[#F59E0B]" />
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-[#92400E]">Image was rejected</p>
+              <p className="text-[13px] text-[#78350F] mt-0.5 leading-relaxed">
+                {result?.rejection_reason ?? "This image was not suitable for AI analysis."}
+              </p>
+            </div>
+          </div>
+        ) : hasResult && label ? (
           <div className="grid sm:grid-cols-3 gap-6">
             <div className="space-y-1">
               <p className="text-[10px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em]">
@@ -109,6 +123,25 @@ export default function ExplainPanel({
         <h3 className="font-display text-[16px] font-medium text-[#0F172A] mb-4">
           Visual attention maps
         </h3>
+        {isRejected ? (
+          <div className="flex items-center gap-4 p-6 bg-[#FFFBEB] border border-[#FEF08A] rounded-2xl">
+            <div className="w-10 h-10 rounded-xl bg-white border border-[#FEF08A] flex items-center justify-center flex-shrink-0">
+              <Eye size={20} className="text-[#F59E0B]" />
+            </div>
+            <p className="text-[13px] text-[#92400E] leading-relaxed">
+              Visual attention maps are not available because this image was not accepted for analysis. Upload a suitable skin lesion image to see Grad-CAM and EigenCAM overlays.
+            </p>
+          </div>
+        ) : xaiError && !hasGradcam ? (
+          <div className="flex items-center gap-4 p-5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl mb-4">
+            <div className="w-9 h-9 rounded-lg bg-white border border-[#E2E8F0] flex items-center justify-center flex-shrink-0">
+              <Info size={16} className="text-[#94A3B8]" />
+            </div>
+            <p className="text-[12px] text-[#64748B] leading-relaxed">
+              Visual explanation maps are not available for this image. This may happen when the grad-cam library is not installed in the current environment. The prediction result is still valid.
+            </p>
+          </div>
+        ) : null}
         <div className="grid md:grid-cols-3 gap-6">
           {/* Original Image */}
           <div className="space-y-3">
