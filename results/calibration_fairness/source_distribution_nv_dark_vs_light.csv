@@ -1,0 +1,7 @@
+ita_group,rosendahl,vienna,row_total
+dark,76 (39.4%),117 (60.6%),193
+light,226 (58.1%),163 (41.9%),389
+,--- CHI-SQUARE ---,,
+,chi2,,17.3651
+,p_value,,0.000031
+,dof,,1

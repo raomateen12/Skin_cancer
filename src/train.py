@@ -4,11 +4,16 @@ Reads config from configs/config.yaml.
 Saves best checkpoint, training history CSV, and training curves.
 
 Usage:
-    python -m src.train --model_name resnet50
     python -m src.train --model_name efficientnet_b0
+    python -m src.train --model_name efficientnet_b0 --use_ita_reweighting
+        Loads train_with_ita.csv, combines class + ITA-group inverse-frequency
+        weights into a WeightedRandomSampler.  Checkpoint saved as
+        checkpoints/best_efficientnet_b0_reweighted.pth.
+        Logs per-ITA-group validation Brier score each epoch.
 """
 
 import argparse
+import math
 from pathlib import Path
 
 import yaml
@@ -16,7 +21,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from torch.cuda.amp import GradScaler, autocast
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn.metrics import f1_score
@@ -52,7 +57,80 @@ def compute_class_weights(train_csv, num_classes):
     return torch.tensor(weights, dtype=torch.float)
 
 
+def compute_ita_sample_weights(
+    df: pd.DataFrame,
+    class_weights_tensor: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Combine per-class inverse-frequency weight with per-ITA-group
+    inverse-frequency weight into a single per-sample weight for
+    WeightedRandomSampler.
+
+    Design:
+      - class_weight[i]     = total / (num_classes * count_of_class_i)
+      - ita_weight[g]       = total_stable / (num_stable_groups * count_stable_in_g)
+        where 'stable' means ita_formula_unstable == False
+      - formula-unstable images get ita_weight = 1.0 (neutral; don't penalise
+        or reward mislabelled ITA groups)
+      - final per-sample weight = class_weight * ita_weight
+
+    Parameters
+    ----------
+    df : DataFrame with columns label_id, ita_group, ita_formula_unstable
+    class_weights_tensor : 1-D tensor of length num_classes
+
+    Returns
+    -------
+    1-D FloatTensor of length len(df)
+    """
+    df = df.reset_index(drop=True)
+    required = {"label_id", "ita_group", "ita_formula_unstable"}
+    missing  = required - set(df.columns)
+    if missing:
+        raise ValueError(f"compute_ita_sample_weights: missing columns {missing}")
+
+    # ── ITA group weights (stable images only) ────────────────────────────────
+    stable_mask = ~df["ita_formula_unstable"].astype(bool)
+    stable_df   = df[stable_mask]
+    stable_groups = [g for g in ["light", "intermediate", "dark"] if g != "unknown"]
+    grp_counts = {
+        g: int((stable_df["ita_group"] == g).sum()) for g in stable_groups
+    }
+    # Only weight groups that actually appear
+    grp_counts = {g: n for g, n in grp_counts.items() if n > 0}
+    total_stable     = int(stable_mask.sum())
+    num_stable_groups = len(grp_counts)
+
+    ita_weight_map: dict[str, float] = {}
+    for g, n in grp_counts.items():
+        ita_weight_map[g] = total_stable / (num_stable_groups * n)
+    # Normalise so median stable weight = 1.0
+    if ita_weight_map:
+        med = float(np.median(list(ita_weight_map.values())))
+        if med > 0:
+            ita_weight_map = {g: w / med for g, w in ita_weight_map.items()}
+
+    print("  ITA group weights (normalised, stable images only):")
+    for g, w in ita_weight_map.items():
+        print(f"    {g:15s}: {w:.4f}  (n_stable={grp_counts[g]})")
+    print(f"    formula-unstable : 1.0000  (neutral, n={int((~stable_mask).sum())})")
+
+    # ── Per-sample weight ─────────────────────────────────────────────────────
+    sample_weights = []
+    for _, row in df.iterrows():
+        cw  = float(class_weights_tensor[int(row["label_id"])])
+        grp = str(row["ita_group"])
+        if bool(row["ita_formula_unstable"]) or grp not in ita_weight_map:
+            iw = 1.0
+        else:
+            iw = ita_weight_map[grp]
+        sample_weights.append(cw * iw)
+
+    return torch.tensor(sample_weights, dtype=torch.float)
+
+
 def collate_fn(batch):
+    """Handles both (img, label) and (img, label, metadata) tuples."""
     images = torch.stack([item[0] for item in batch])
     labels = torch.tensor([item[1] for item in batch])
     return images, labels
@@ -91,6 +169,7 @@ def eval_one_epoch(model, loader, criterion, device):
     model.eval()
     total_loss, correct, total = 0.0, 0, 0
     all_preds, all_labels = [], []
+    all_probs: list[np.ndarray] = []
 
     with torch.no_grad():
         for images, labels in tqdm(loader, desc="  val  ", leave=False):
@@ -104,9 +183,37 @@ def eval_one_epoch(model, loader, criterion, device):
             total += images.size(0)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            probs = torch.softmax(outputs, dim=1).cpu().numpy()
+            all_probs.append(probs)
 
     val_f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
-    return total_loss / total, correct / total, val_f1
+    probs_arr = np.concatenate(all_probs, axis=0)  # (N, C)
+    return total_loss / total, correct / total, val_f1, probs_arr, np.array(all_labels)
+
+
+def brier_multiclass(probs: np.ndarray, labels: np.ndarray, num_classes: int) -> float:
+    """Mean multiclass Brier score = mean( sum_c (p_c - y_c)^2 )."""
+    one_hot = np.eye(num_classes)[labels]
+    return float(np.mean(np.sum((probs - one_hot) ** 2, axis=1)))
+
+
+def log_ita_group_brier(
+    probs: np.ndarray,
+    labels: np.ndarray,
+    ita_groups: np.ndarray,
+    num_classes: int,
+) -> None:
+    """Print per-ITA-group accuracy and Brier score for the validation set."""
+    print("  Val Brier by ITA group:")
+    for grp in ["light", "intermediate", "dark", "unknown"]:
+        mask = ita_groups == grp
+        n = int(mask.sum())
+        if n == 0:
+            continue
+        acc   = float((probs[mask].argmax(axis=1) == labels[mask]).mean())
+        brier = brier_multiclass(probs[mask], labels[mask], num_classes)
+        flag  = " ⚠" if n < 30 else ""
+        print(f"    {grp:13s}: n={n:>4d}  acc={acc:.4f}  Brier={brier:.4f}{flag}")
 
 
 def save_curves(history, save_path, model_name):
@@ -141,8 +248,17 @@ def main():
     parser.add_argument("--model_name", type=str, default="resnet50",
                         choices=["resnet50", "efficientnet_b0"],
                         help="Model architecture to train")
+    parser.add_argument("--use_ita_reweighting", action="store_true", default=False,
+                        help="Combine class + ITA-group inverse-frequency weights via "
+                             "WeightedRandomSampler.  Requires train_with_ita.csv. "
+                             "Saves checkpoint as best_<model>_reweighted.pth.")
+    parser.add_argument("--train_csv_override", type=str, default=None,
+                        help="Override training CSV path (e.g. for smoke-test subset).")
+    parser.add_argument("--epochs", type=int, default=None,
+                        help="Override num_epochs from config.yaml.")
     args = parser.parse_args()
-    model_name = args.model_name
+    model_name          = args.model_name
+    use_ita_reweighting = args.use_ita_reweighting
 
     cfg = load_config()
     seed        = cfg.get("seed", 42)
@@ -153,31 +269,86 @@ def main():
     num_workers = cfg.get("num_workers", 2)
     patience    = 5
 
+    # CLI overrides (useful for smoke-test / Colab)
+    if args.epochs is not None:
+        num_epochs = args.epochs
+
     torch.manual_seed(seed)
     np.random.seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Model : {model_name}")
-    print(f"Device: {device}")
+    print(f"Model              : {model_name}")
+    print(f"ITA reweighting    : {use_ita_reweighting}")
+    print(f"Device             : {device}")
     if device.type == "cuda":
         print(f"  GPU: {torch.cuda.get_device_name(0)}")
     use_amp = device.type == "cuda"
 
     num_classes = len(class_to_idx)
-    train_csv = "data/processed/train.csv"
-    val_csv   = "data/processed/val.csv"
+
+    # ── Choose training CSV ───────────────────────────────────────────────────
+    if args.train_csv_override:
+        train_csv = args.train_csv_override
+        print(f"  [override] train_csv = {train_csv}")
+    elif use_ita_reweighting:
+        train_csv = "data/processed/train_with_ita.csv"
+        if not Path(train_csv).exists():
+            raise FileNotFoundError(
+                f"{train_csv} not found. "
+                "Run: python -m src.label_ita_splits  first."
+            )
+    else:
+        train_csv = "data/processed/train.csv"
+    val_csv = "data/processed/val.csv"
+
+    # ── Checkpoint path ───────────────────────────────────────────────────────
+    if use_ita_reweighting:
+        checkpoint_path = f"checkpoints/best_{model_name}_reweighted.pth"
+    else:
+        checkpoint_path = f"checkpoints/best_{model_name}.pth"
 
     train_dataset = HAM10000Dataset(train_csv, image_size, get_train_transforms(image_size))
     val_dataset   = HAM10000Dataset(val_csv,   image_size, get_eval_transforms(image_size))
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
-                              num_workers=num_workers, pin_memory=(device.type == "cuda"),
-                              collate_fn=collate_fn)
-    val_loader   = DataLoader(val_dataset,   batch_size=batch_size, shuffle=False,
-                              num_workers=num_workers, pin_memory=(device.type == "cuda"),
-                              collate_fn=collate_fn)
+    # ── Build DataLoaders ─────────────────────────────────────────────────────
+    class_weights_cpu = compute_class_weights(train_csv, num_classes)
 
-    class_weights = compute_class_weights(train_csv, num_classes).to(device)
+    if use_ita_reweighting:
+        print("\n  Computing ITA-combined sample weights …")
+        train_df_full = pd.read_csv(train_csv)
+        sample_weights = compute_ita_sample_weights(train_df_full, class_weights_cpu)
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True,
+        )
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, sampler=sampler,
+            num_workers=num_workers, pin_memory=(device.type == "cuda"),
+            collate_fn=collate_fn,
+        )
+        # Build val ITA group array for per-epoch Brier logging
+        val_csv_ita = "data/processed/val_with_ita.csv"
+        if Path(val_csv_ita).exists():
+            val_ita_groups = pd.read_csv(val_csv_ita)["ita_group"].values
+        else:
+            val_ita_groups = None
+            print("  WARNING: val_with_ita.csv not found — per-group Brier logging disabled.")
+    else:
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True,
+            num_workers=num_workers, pin_memory=(device.type == "cuda"),
+            collate_fn=collate_fn,
+        )
+        val_ita_groups = None
+
+    val_loader = DataLoader(
+        val_dataset, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=(device.type == "cuda"),
+        collate_fn=collate_fn,
+    )
+
+    class_weights = class_weights_cpu.to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     model = get_model(model_name, num_classes).to(device)
@@ -187,9 +358,9 @@ def main():
 
     Path("checkpoints").mkdir(exist_ok=True)
     Path("results").mkdir(exist_ok=True)
-    checkpoint_path = f"checkpoints/best_{model_name}.pth"
-    history_path    = f"results/{model_name}_training_history.csv"
-    curves_path     = f"results/{model_name}_training_curves.png"
+    suffix          = "_reweighted" if use_ita_reweighting else ""
+    history_path    = f"results/{model_name}{suffix}_training_history.csv"
+    curves_path     = f"results/{model_name}{suffix}_training_curves.png"
 
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": [], "val_f1": []}
     best_val_f1 = 0.0
@@ -204,7 +375,9 @@ def main():
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, use_amp, scaler
         )
-        val_loss, val_acc, val_f1 = eval_one_epoch(model, val_loader, criterion, device)
+        val_loss, val_acc, val_f1, val_probs, val_labels = eval_one_epoch(
+            model, val_loader, criterion, device
+        )
         scheduler.step()
 
         history["train_loss"].append(train_loss)
@@ -216,19 +389,24 @@ def main():
         print(f"  train_loss={train_loss:.4f}  train_acc={train_acc:.4f}")
         print(f"  val_loss={val_loss:.4f}    val_acc={val_acc:.4f}  val_f1={val_f1:.4f}")
 
+        # Per-ITA-group Brier logging (only when reweighting or val ITA labels available)
+        if use_ita_reweighting and val_ita_groups is not None:
+            log_ita_group_brier(val_probs, val_labels, val_ita_groups, num_classes)
+
         # Save best model based on highest val weighted F1
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
             epochs_no_improve = 0
             torch.save({
-                "epoch": epoch,
-                "model_name": model_name,
-                "model_state_dict": model.state_dict(),
+                "epoch":                epoch,
+                "model_name":           model_name,
+                "use_ita_reweighting":  use_ita_reweighting,
+                "model_state_dict":     model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "val_loss": val_loss,
-                "val_accuracy": val_acc,
-                "val_weighted_f1": val_f1,
-                "class_to_idx": class_to_idx,
+                "val_loss":             val_loss,
+                "val_accuracy":         val_acc,
+                "val_weighted_f1":      val_f1,
+                "class_to_idx":         class_to_idx,
             }, checkpoint_path)
             print(f"  ✓ Best model saved (val_f1={val_f1:.4f}) → {checkpoint_path}")
         else:

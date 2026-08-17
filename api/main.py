@@ -219,124 +219,90 @@ def _load_model() -> bool:
         return False
 
 
-def _check_vectorstore() -> bool:
-    """Check if FAISS vectorstore index exists on disk."""
-    return (RAG_INDEX_PATH / "index.faiss").exists()
-
-
-def _check_rag_dependencies() -> bool:
-    """Return True if all RAG/langchain dependencies are importable."""
-    try:
-        import langchain_community  # noqa: F401
-        import langchain_huggingface  # noqa: F401
-        import faiss  # noqa: F401
-        import sentence_transformers  # noqa: F401
-        return True
-    except ImportError:
-        return False
+# ── Image validation ────────────────────────────────────────────────────────
+# Try to import the dedicated validator module.  Falls back to a simpler
+# inline heuristic if the src package is unavailable.
+try:
+    from src.image_validator import validate_skin_lesion_image as _ext_validator
+    logger.info("image_validator: loaded from src.image_validator")
+    _use_external_validator = True
+except Exception as _ve:
+    logger.warning("src.image_validator not available (%s) — using inline fallback", _ve)
+    _use_external_validator = False
 
 
 def _validate_skin_image(image_bytes: bytes) -> dict:
     """
-    Lightweight heuristic gate to check if the uploaded image is plausibly
-    a close-up skin/lesion photo rather than a screenshot, document, or object photo.
-
-    Returns:
-      {"valid": True}  — image passes, proceed with prediction
-      {"valid": False, "reason": str, "guidance": str}  — reject with user message
-      {"valid": True, "warning": str}  — uncertain, allow but warn
+    Dispatch to the external image_validator module when available.
+    Returns the canonical dict:
+      {"is_valid": bool, "confidence": float, "reason": str|None,
+       "guidance": str|None, "warnings": list[str]}
     """
+    if _use_external_validator:
+        return _ext_validator(image_bytes)  # type: ignore[return-value]
+
+    # ── Minimal inline fallback (runs only if src.image_validator is missing) ──
     try:
         import numpy as np
         from PIL import Image as PILImage
+        import cv2
 
         pil_img = PILImage.open(io.BytesIO(image_bytes)).convert("RGB")
         w, h = pil_img.size
-
-        # ── 1. Extreme aspect ratio check ────────────────────────────────────
         aspect = max(w, h) / max(min(w, h), 1)
         if aspect > 3.5:
-            logger.info("Validation REJECT: extreme aspect ratio %.2f", aspect)
-            return {
-                "valid": False,
-                "reason": "This image does not appear to be a close-up skin lesion photo (extreme aspect ratio detected).",
-                "guidance": "Please upload a clear, close-up photo of the skin area or lesion with roughly equal width and height.",
-            }
-
-        # ── 2. Minimum resolution check ──────────────────────────────────────
+            return {"is_valid": False, "confidence": 0.95,
+                    "reason": "Extreme aspect ratio — likely not a dermoscopic image.",
+                    "guidance": "Upload a close-up skin lesion photo.", "warnings": []}
         if w < 50 or h < 50:
-            logger.info("Validation REJECT: image too small (%dx%d)", w, h)
-            return {
-                "valid": False,
-                "reason": "The uploaded image is too small to analyze meaningfully.",
-                "guidance": "Please upload a higher-resolution, close-up photo of the skin lesion (at least 50x50 pixels).",
-            }
+            return {"is_valid": False, "confidence": 0.99,
+                    "reason": "Image too small.",
+                    "guidance": "Upload a higher-resolution image.", "warnings": []}
 
         thumb = pil_img.resize((224, 224))
         img_np = np.array(thumb, dtype=np.float32)
-
-        # ── 3. Screenshot/UI detection — uniform color block ratio ───────────
-        r, g, b = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2]
-        near_white = ((r > 230) & (g > 230) & (b > 230)).sum()
-        near_black = ((r < 25) & (g < 25) & (b < 25)).sum()
-        total_pixels = 224 * 224
-        white_ratio = near_white / total_pixels
-        black_ratio = near_black / total_pixels
-
-        if white_ratio > 0.65:
-            logger.info("Validation REJECT: %.1f%% near-white pixels (likely screenshot/doc)", white_ratio * 100)
-            return {
-                "valid": False,
-                "reason": "This image appears to be a screenshot, document, or webpage rather than a skin photo.",
-                "guidance": "Please upload a direct photo of the skin area or lesion in good lighting.",
-            }
-        if black_ratio > 0.60:
-            logger.info("Validation REJECT: %.1f%% near-black pixels (likely dark UI/video)", black_ratio * 100)
-            return {
-                "valid": False,
-                "reason": "This image appears to be a dark-background screenshot or video frame, not a skin photo.",
-                "guidance": "Please upload a clear, well-lit close-up photo of the skin area or lesion.",
-            }
-
-        # ── 4. Skin-tone pixel ratio check (YCrCb space) ─────────────────────
         img_uint8 = img_np.clip(0, 255).astype(np.uint8)
-        try:
-            import cv2
-            ycrcb = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2YCrCb)
-            Y, Cr, Cb = ycrcb[:, :, 0], ycrcb[:, :, 1], ycrcb[:, :, 2]
-            skin_mask = (
-                (Y > 60) & (Y < 255) &
-                (Cr > 120) & (Cr < 185) &
-                (Cb > 60) & (Cb < 135)
-            )
-            skin_ratio = skin_mask.sum() / total_pixels
-            logger.info("Skin-tone pixel ratio: %.3f", skin_ratio)
+        total = 224 * 224
+        r, g, b = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2]
 
-            if skin_ratio < 0.04:
-                logger.info("Validation REJECT: very low skin-tone ratio %.3f", skin_ratio)
-                return {
-                    "valid": False,
-                    "reason": "This image does not appear to contain skin tones. It may be an object, logo, or unrelated photo.",
-                    "guidance": "Please upload a clear, close-up photo of a skin area or lesion in good lighting.",
-                }
-        except ImportError:
-            logger.warning("OpenCV not available — skipping skin-tone pixel check")
-            skin_ratio = 0.5
+        if ((r > 230) & (g > 230) & (b > 230)).sum() / total > 0.65:
+            return {"is_valid": False, "confidence": 0.93,
+                    "reason": "Screenshot or document detected (too many white pixels).",
+                    "guidance": "Upload a direct photo of the skin area.", "warnings": []}
+        if ((r < 25) & (g < 25) & (b < 25)).sum() / total > 0.60:
+            return {"is_valid": False, "confidence": 0.91,
+                    "reason": "Dark-background image detected.",
+                    "guidance": "Upload a well-lit close-up skin photo.", "warnings": []}
+        if img_np.std() < 8.0:
+            return {"is_valid": False, "confidence": 0.85,
+                    "reason": "Near-uniform color — not a skin lesion photo.",
+                    "guidance": "Upload a clear close-up skin lesion photo.", "warnings": []}
 
-        # ── 5. Global color variance check ───────────────────────────────────
-        global_std = float(img_np.std())
-        logger.info("Global pixel std: %.2f", global_std)
-        if global_std < 8.0:
-            logger.info("Validation REJECT: near-flat image (std=%.2f)", global_std)
-            return {
-                "valid": False,
-                "reason": "The image appears to be nearly uniform in color and does not resemble a skin lesion photo.",
-                "guidance": "Please upload a clear, close-up photo of the skin area or lesion.",
-            }
+        # Face detection
+        gray = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2GRAY)
+        cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        if not cascade.empty():
+            faces = cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4, minSize=(35, 35))
+            if len(faces) > 0:
+                face_area = sum(int(fw) * int(fh) for (_, _, fw, fh) in faces)
+                if face_area / total > 0.03:
+                    return {"is_valid": False, "confidence": 0.92,
+                            "reason": "Portrait or selfie detected.",
+                            "guidance": "Upload a close-up photo of the specific skin lesion only.",
+                            "warnings": []}
 
-        # ── 6. Uncertain — low skin ratio → warn but allow ───────────────────
+        # Skin-tone ratio
+        ycrcb = cv2.cvtColor(img_uint8, cv2.COLOR_RGB2YCrCb)
+        Y, Cr, Cb = ycrcb[:, :, 0], ycrcb[:, :, 1], ycrcb[:, :, 2]
+        skin_ratio = float(((Y > 60) & (Y < 255) & (Cr > 120) & (Cr < 185) & (Cb > 60) & (Cb < 135)).sum()) / total
+        if skin_ratio < 0.04:
+            return {"is_valid": False, "confidence": 0.87,
+                    "reason": "No skin tones detected.",
+                    "guidance": "Upload a close-up photo of a skin area or lesion.", "warnings": []}
+        warnings = []
         if skin_ratio < 0.12:
-            logger.info("Validation WARN: low skin-tone ratio %.3f — allowing with warning", skin_ratio)
             return {
                 "valid": True,
                 "warning": (
@@ -516,8 +482,10 @@ async def predict(file: UploadFile = File(...)):
 
         # ── Step 1: Image validation gate ────────────────────────────────────
         validation = _validate_skin_image(contents)
-        if not validation["valid"]:
-            logger.info("Image rejected: %s", validation.get("reason", "unknown"))
+        if not validation["is_valid"]:
+            logger.info("Image rejected [%s]: %s",
+                        validation.get("confidence", "?"),
+                        validation.get("reason", "unknown"))
             return {
                 "ok": False,
                 "available": False,
@@ -532,9 +500,17 @@ async def predict(file: UploadFile = File(...)):
                 ),
                 "gradcam_available": False,
                 "gradcam_images": None,
+                "validation": {
+                    "is_valid": False,
+                    "confidence": validation.get("confidence"),
+                    "reason": validation.get("reason"),
+                    "warnings": validation.get("warnings", []),
+                },
             }
 
-        image_quality_warning: str | None = validation.get("warning")
+        # Capture quality warnings from the validator
+        val_warnings = validation.get("warnings") or []
+        image_quality_warning: str | None = val_warnings[0] if val_warnings else None
 
         # ── Step 2: Run ML inference ──────────────────────────────────────────
         img = Image.open(io.BytesIO(contents)).convert("RGB")

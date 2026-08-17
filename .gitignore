@@ -34,6 +34,16 @@ results/*.csv
 !results/README.md
 !results/rag_eval/.gitkeep
 
+# Calibration fairness — large per-image files (regeneratable, not needed on Colab)
+results/calibration_fairness/ita_validation_samples/
+results/calibration_fairness/corner_crops_zoomed/
+results/calibration_fairness/vignette_diagnostic.csv
+results/calibration_fairness/ita_formula_diagnostic.csv
+
+# Smoke-test artifacts (not real training runs)
+results/efficientnet_b0_reweighted_training_history.csv
+results/efficientnet_b0_reweighted_training_curves.png
+
 # FAISS index files
 vectorstore/faiss_index/
 !vectorstore/faiss_index/.gitkeep

@@ -1,0 +1,7 @@
+group_a,group_b,metric,observed_diff,ci_lower,ci_upper,p_value,significant
+light,intermediate,ece,-0.014245,-0.069346,0.037505,0.0001,False
+light,intermediate,brier,0.00285,-0.108246,0.113793,0.121988,False
+light,dark,ece,-0.040119,-0.106721,0.019275,0.0001,False
+light,dark,brier,-0.146703,-0.261572,-0.021038,0.0001,True
+intermediate,dark,ece,-0.025873,-0.094682,0.03694,0.0001,False
+intermediate,dark,brier,-0.149553,-0.276134,-0.03011,0.0001,True

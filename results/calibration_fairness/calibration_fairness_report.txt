@@ -1,0 +1,172 @@
+========================================================================
+  DermaLens AI — Calibration Fairness Report
+  Model   : efficientnet_b0
+  Split   : test
+========================================================================
+
+── OVERALL METRICS ─────────────────────────────────────────────────────
+  Accuracy : 0.8603
+  ECE      : 0.0324
+  MCE      : 0.3206
+  Brier    : 0.2107
+  N total  : 1002
+
+── ITA GROUP SAMPLE COUNTS ─────────────────────────────────────────────
+  light          :  540
+  intermediate   :   97
+  dark           :  345
+  unknown        :   20 ⚠ BELOW 30 — low statistical power
+
+── RAW (UNMATCHED) CALIBRATION PER ITA GROUP ───────────────────────────
+  Group               N   Accuracy      ECE      MCE    Brier
+  ------------------------------------------------------------
+  light             540     0.8963   0.0300   0.4410   0.1583
+  intermediate       97     0.9072   0.0700   0.5084   0.1594
+  dark              345     0.7913   0.0600   0.3206   0.3049
+
+── MATCHED-SIZE CALIBRATION (mean ± std across 1 000 bootstrap runs) ───
+  Group           N_min                  ECE                  MCE                Brier
+  ----------------------------------------------------------------------------------
+  light              97 0.0671 ± 0.0181   0.5578 ± 0.1138   0.1590 ± 0.0402
+  intermediate       97 0.0813 ± 0.0219   0.5896 ± 0.0933   0.1562 ± 0.0415
+  dark               97 0.1072 ± 0.0264   0.4855 ± 0.1258   0.3057 ± 0.0476
+
+── CALIBRATION DISPARITY FLAGS (matched ECE mean gap) ───────────────────
+  No matched-ECE mean gap between any two groups exceeds 0.05.
+
+── STATISTICAL SIGNIFICANCE (ECE and Brier, matched bootstrap) ─────────
+  Pair                                Metric     Diff                  95% CI   p-value   Sig?
+  ------------------------------------------------------------------------------------------
+  light vs intermediate               ece     -0.0142         [-0.0693, 0.0375]    0.0001     no
+  light vs intermediate               brier    0.0029         [-0.1082, 0.1138]    0.1220     no
+  light vs dark                       ece     -0.0401         [-0.1067, 0.0193]    0.0001     no
+  light vs dark                       brier   -0.1467        [-0.2616, -0.0210]    0.0001  YES *
+  intermediate vs dark                ece     -0.0259         [-0.0947, 0.0369]    0.0001     no
+  intermediate vs dark                brier   -0.1496        [-0.2761, -0.0301]    0.0001  YES *
+
+  * = 95% bootstrap CI of the difference excludes zero
+  ⚠  light vs dark (BRIER): diff=-0.1467, CI=[-0.2616,-0.0210], p=0.0001
+  ⚠  intermediate vs dark (BRIER): diff=-0.1496, CI=[-0.2761,-0.0301], p=0.0001
+
+── CONFOUND CHECK — CLASS DISTRIBUTION ACROSS ITA GROUPS ──────────────
+  Chi-square statistic : 42.0357
+  p-value              : 0.000033
+  Degrees of freedom   : 12
+
+  INTERPRETATION: Lesion-class distribution differs SIGNIFICANTLY across
+  ITA skin-tone groups (p < 0.05). This is a strong confound: different
+  lesion types are not equally represented across estimated skin-tone
+  groups in HAM10000. The observed accuracy and Brier-score gaps between
+  ITA groups are therefore at least partly explained by this class-
+  distribution imbalance rather than the model being differentially
+  calibrated across skin tones. Calibration-gap conclusions should be
+  interpreted with caution until class-stratified analyses are done.
+
+── CLASS-STRATIFIED ANALYSIS ──────────────────────────────────────────────
+  Threshold: >= 15 samples per ITA group within a class
+  (Checks whether Brier-score disparities persist WITHIN individual classes)
+
+  CLASSES SKIPPED (insufficient samples in at least one ITA group):
+    akiec   : light= 15, intermediate=  3, dark= 14  [below threshold: intermediate=3, dark=14]
+    bcc     : light= 29, intermediate=  2, dark= 21  [below threshold: intermediate=2]
+    bkl     : light= 45, intermediate= 11, dark= 54  [below threshold: intermediate=11]
+    df      : light=  6, intermediate=  0, dark=  5  [below threshold: light=6, intermediate=0, dark=5]
+    mel     : light= 46, intermediate=  4, dark= 54  [below threshold: intermediate=4]
+    vasc    : light= 10, intermediate=  0, dark=  4  [below threshold: light=10, intermediate=0, dark=4]
+
+  QUALIFYING CLASSES:
+    nv      : light n=389, intermediate n=77, dark n=193
+
+  WITHIN-CLASS BRIER SCORE COMPARISON:
+
+  [NV]  (bootstrap N_min=77, with replacement, 1 000 iterations)
+    light        : n=389  acc=0.9434  Brier=0.0880
+    intermediate : n= 77  acc=0.9221  Brier=0.1189
+    dark         : n=193  acc=0.7772  Brier=0.3184
+    Pair                               Diff                  95% CI   Sig?
+    ----------------------------------------------------------------------
+    light vs intermediate           -0.0290         [-0.1368, 0.0715]     no
+    light vs dark                   -0.2307        [-0.3596, -0.1122]  YES *
+    intermediate vs dark            -0.2018        [-0.3381, -0.0731]  YES *
+
+    => dark vs light: Brier gap IS significant within nv (gap PERSISTS after class stratification)
+    => dark vs intermediate: Brier gap IS significant within nv (gap PERSISTS after class stratification)
+
+  OVERALL VERDICT:
+  The Brier-score disparity involving the dark ITA group PERSISTS
+  within at least one qualifying lesion class even after controlling
+  for class composition. This means the disparity is only PARTIALLY
+  explained by class-distribution imbalance; a genuine model-level
+  performance difference across estimated skin-tone groups cannot
+  be ruled out. Further investigation is warranted.
+  ⚠  Significant within-class gap: nv (light vs dark)
+  ⚠  Significant within-class gap: nv (intermediate vs dark)
+
+── LIMITATION ──────────────────────────────────────────────────────────
+  Skin-tone estimated via ITA on dermoscopic close-up images using corner-pixel sampling; this is a proxy estimate, not clinically verified Fitzpatrick typing, and may be less reliable than on clinical/macro photographs where more surrounding skin is visible.
+
+── METHODOLOGY REFERENCE ───────────────────────────────────────────────
+  Matched-sample-size bootstrap follows: Ricci Lara et al.,
+  'Addressing Fairness in Artificial Intelligence for Medical Imaging',
+  arXiv:2305.05101 (2023).
+
+  ITA binning (light/intermediate/dark) follows Hall et al. (2022) and
+  Chardon et al. (1991): ITA > 41 = light, 10–41 = intermediate, <10 = dark.
+========================================================================
+
+========================================================================
+  ADDENDUM: ITA Formula-Degeneracy & Source-Stratified Brier Analysis
+========================================================================
+
+-- B* FORMULA-DEGENERACY CHECK -----------------------------------------
+  ITA = atan( (L-50) / b* ) x (180/pi)  -- extreme when b* near zero.
+  Flag threshold: |b*| < 5
+
+  Group           n     mean_L   mean|b*|  mean|ITA|  %unstable
+  ------------------------------------------------------------
+  light           540     61.90      6.544      69.40      41.7%
+  intermediate     97     56.85     13.203      29.04      11.3%
+  dark            345     55.73      5.570      60.97      51.9%
+  unknown          20      0.14      0.044        nan     100.0%
+
+  Pearson r( |b*|, |ITA| ) = -0.6167  (p = 5.84e-104)
+  Rosendahl-only: r = -0.6557  |  Vienna-only: r = -0.5808  (both p < 0.0001)
+  Verdict: NEGATIVE correlation confirmed — small |b*| drives large |ITA| (DEGENERACY)
+
+  435 / 1002 images (43.4%) flagged |b*| < 5.
+  Dark group: 51.9% formula-unstable  vs  Light: 41.7%.
+
+  KEY FINDING: The strong negative correlation (r = -0.62) means extreme
+  ITA values arise substantially from near-zero b* denominators, not solely
+  from true skin darkness. Pink or erythematous dermoscopic skin can produce
+  ITA near -90 or +90 regardless of true lightness. The dark group has
+  51.9% formula-unstable images vs 41.7% in the light group, meaning ITA
+  group labels carry substantial noise from this formula artefact.
+
+-- SOURCE-STRATIFIED BRIER COMPARISON (nv class only) ------------------
+  Restricts nv to a single acquisition source to disentangle skin-tone
+  from institution/camera effects.
+
+  Source       Pair                     n_a  n_b  Brier_a  Brier_b     diff        95% CI               Sig?
+  ----------------------------------------------------------------------------------------------------
+  rosendahl    dark vs light              76  226  0.3274  0.0506   +0.2783          [0.1528, 0.4087]  YES *
+  rosendahl    dark vs intermediate       76   43  0.3274  0.0576   +0.2730          [0.1169, 0.4392]  YES *
+  rosendahl    light vs intermediate     226   43  0.0506  0.0576   -0.0069         [-0.0875, 0.0967]  no
+  vienna       dark vs light             117  163  0.3127  0.1398   +0.1739          [0.0809, 0.2785]  YES *
+  vienna       dark vs intermediate      117   34  0.3127  0.1964   +0.1114         [-0.1145, 0.3325]  no
+  vienna       light vs intermediate     163   34  0.1398  0.1964   -0.0565         [-0.2828, 0.1518]  no
+
+  PLAIN ENGLISH VERDICT:
+  The dark-vs-light Brier gap in nv PERSISTS in BOTH Rosendahl-only
+  (diff=+0.278, CI=[0.153,0.409]) AND Vienna-only (diff=+0.174,
+  CI=[0.081,0.279]) subsets. The gap cannot be attributed purely to
+  institution/camera differences -- it holds regardless of source.
+
+  Combined with the b*-degeneracy finding (r=-0.62): the ITA group
+  labels themselves are noisy (52% of the dark group may be
+  formula-artefacts from near-zero b*). Despite this noise, a robust
+  Brier disparity remains. True skin-tone ground truth (Fitzpatrick
+  typing) would be needed to fully confirm causal attribution.
+  !! rosendahl: dark vs light within nv is significant -- gap PERSISTS
+  !! vienna: dark vs light within nv is significant -- gap PERSISTS
+========================================================================
