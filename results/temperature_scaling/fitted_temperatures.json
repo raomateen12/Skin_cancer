@@ -1,0 +1,14 @@
+{
+  "T_global": 1.1293666362762451,
+  "T_per_group": {
+    "light": 1.1790847778320312,
+    "intermediate": 1.175291895866394,
+    "dark": 1.0453271865844727
+  },
+  "val_n_per_group": {
+    "light": 532,
+    "intermediate": 100,
+    "dark": 342
+  },
+  "note": "Fitted on val_with_ita.csv via LBFGS minimising NLL (Guo et al. 2017)"
+}

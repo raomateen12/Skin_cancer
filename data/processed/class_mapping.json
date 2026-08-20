@@ -1,0 +1,29 @@
+{
+  "class_to_idx": {
+    "akiec": 0,
+    "bcc": 1,
+    "bkl": 2,
+    "df": 3,
+    "mel": 4,
+    "nv": 5,
+    "vasc": 6
+  },
+  "idx_to_class": {
+    "0": "akiec",
+    "1": "bcc",
+    "2": "bkl",
+    "3": "df",
+    "4": "mel",
+    "5": "nv",
+    "6": "vasc"
+  },
+  "label_names": {
+    "akiec": "Actinic keratoses",
+    "bcc": "Basal cell carcinoma",
+    "bkl": "Benign keratosis-like lesions",
+    "df": "Dermatofibroma",
+    "mel": "Melanoma",
+    "nv": "Melanocytic nevi",
+    "vasc": "Vascular lesions"
+  }
+}

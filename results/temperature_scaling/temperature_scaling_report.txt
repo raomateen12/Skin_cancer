@@ -1,0 +1,52 @@
+========================================================================
+  DermaLens AI - Temperature Scaling Calibration Report
+========================================================================
+
+Method: Post-hoc Temperature Scaling (Guo et al. 2017).
+  - NO retraining; original baseline checkpoint used as-is.
+  - Temperatures fitted on VAL set via LBFGS (minimise NLL).
+  - Evaluation on TEST set (completely held out, no data leakage).
+
+FITTED TEMPERATURES:
+  T_global       = 1.1294
+  T_light         = 1.1791  (n_val=532)
+  T_intermediate  = 1.1753  (n_val=100)
+  T_dark          = 1.0453  (n_val=342)
+
+  T > 1 => model was overconfident, scaling softens probs.
+  T < 1 => model was underconfident, scaling sharpens probs.
+
+ACCURACY SANITY CHECK:
+  Uncalibrated / Global-T / Per-group-T all give acc = 0.8603  PASS
+
+THREE-WAY CALIBRATION COMPARISON (test set):
+  Group             n  Brier_uncal  Brier_glob  Brier_pergrp  ECE_uncal  ECE_glob  ECE_pergrp
+  ------------------------------------------------------------------------------------------
+  light           540       0.1583      0.1572        0.1572     0.0301    0.0328      0.0390
+  intermediate     97       0.1594      0.1579        0.1575     0.0700    0.0757      0.0870
+  dark            345       0.3049      0.3040        0.3044     0.0600    0.0374      0.0637
+  overall         982       0.2099      0.2089        0.2089     0.0445    0.0290      0.0235
+
+DARK-VS-LIGHT BRIER GAP (bootstrap, 1000 iterations):
+  Calibration                     Gap(dark-light)                  95% CI   Sig?
+  --------------------------------------------------------------------------------
+  uncalibrated                            +0.1468  [0.0807,0.2133]    YES
+  global_temperature                      +0.1477  [0.0848,0.2126]    YES
+  per_group_temperature                   +0.1484  [0.0865,0.2063]    YES
+
+VERDICT:
+  (a) Accuracy preserved: YES — all three methods give acc=0.8603.
+  (b) Dark-vs-light gap change (uncal -> per-group-T): +0.0016
+      Gap LARGELY UNCHANGED (|change|=0.0016).
+      CI overlap = 0.1198 => gap change inconclusive from CI comparison.
+
+  The dark-vs-light gap remains statistically significant even after
+  per-group temperature scaling. The gap reflects inherent difficulty
+  differences that confidence rescaling alone cannot address.
+
+OUTPUT FILES (results/temperature_scaling/):
+  fitted_temperatures.json   - T_global and T_per_group
+  three_way_comparison.csv   - ECE/MCE/Brier for all three methods
+  gap_significance_test.csv  - bootstrap gap for all three
+  temperature_scaling_report.txt - this file
+========================================================================

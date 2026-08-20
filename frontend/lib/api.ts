@@ -50,6 +50,12 @@ export interface PredictResult {
   gradcam_images_list?: string[];  // legacy flat [orig, gradcam, eigencam]
   xai_error?: string | null;
   image_quality_warning?: string | null;
+  // Clinical Alert System fields
+  alert_level?: "high_risk" | "low_confidence" | "normal";
+  alert_message?: string | null;
+  skin_tone_reliability_note?: string | null;
+  ita_group?: string | null;
+  ita_value?: number | null;
   // Offline / error
   error?: string;
   missing_path?: string;
@@ -60,10 +66,29 @@ export interface PredictResult {
 export interface AssistantResult {
   ok?: boolean;
   answer: string;
-  sources: Array<{ source: string; page: number }>;
+  sources: Array<{ source: string; page: number | string }>;
   language_detected: string;
   language?: string;
   disclaimer?: string;
+  // Citation-grounding & hallucination-verification fields
+  answer_html?: string;
+  citations?: Array<{
+    marker: number;
+    source: string;
+    page: number | string;
+    chunk_text_snippet: string;
+  }>;
+  sentences?: Array<{
+    text: string;
+    status: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED";
+    citation_markers?: number[];
+  }>;
+  verification_summary?: {
+    total: number;
+    supported: number;
+    partial: number;
+    unsupported: number;
+  };
 }
 
 // ─── API calls ────────────────────────────────────────────────────────────────
@@ -158,7 +183,7 @@ export async function askAssistant(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, language }),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!res.ok) {

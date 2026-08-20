@@ -67,11 +67,18 @@ def _rgb_to_cielab(r: float, g: float, b: float) -> tuple[float, float, float]:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def compute_ita_for_image(
-    image_path: str,
+    image_input: str | Path | bytes | Image.Image,
     patch: int = 20,
 ) -> tuple[float | None, float | None]:
     """
     Estimate ITA = atan((L*-50)/b*) × (180/π) from four corner patches.
+
+    Parameters
+    ----------
+    image_input : str | Path | bytes | PIL.Image.Image
+        Image path, raw bytes, or PIL Image object.
+    patch : int
+        Corner patch dimension in pixels.
 
     Returns
     -------
@@ -79,7 +86,14 @@ def compute_ita_for_image(
     mean_b_star : float | None   (mean b* across 4 corners; None on failure)
     """
     try:
-        img = Image.open(image_path).convert("RGB")
+        import io
+        if isinstance(image_input, Image.Image):
+            img = image_input.convert("RGB")
+        elif isinstance(image_input, (bytes, bytearray)):
+            img = Image.open(io.BytesIO(image_input)).convert("RGB")
+        else:
+            img = Image.open(image_input).convert("RGB")
+
         w, h = img.size
         px = max(1, min(patch, w // 4, h // 4))
 
@@ -113,7 +127,7 @@ def compute_ita_for_image(
 
 
 def ita_to_group(ita_value: float | None) -> str:
-    """Bin ITA value into skin-tone group label."""
+    """Bin ITA value into skin-tone group label ('light', 'intermediate', 'dark', or 'unknown')."""
     if ita_value is None:
         return "unknown"
     if ita_value < 10:
@@ -121,6 +135,9 @@ def ita_to_group(ita_value: float | None) -> str:
     if ita_value <= 41:
         return "intermediate"
     return "light"
+
+
+compute_ita_group = ita_to_group
 
 
 def is_formula_unstable(mean_b_star: float | None, threshold: float = B_STAR_UNSTABLE_THRESHOLD) -> bool:

@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, WifiOff, Clock, ChevronRight, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
+import { Activity, WifiOff, Clock, ChevronRight, AlertTriangle, Info, CheckCircle2, AlertOctagon } from "lucide-react";
 import StatusBadge from "@/components/shared/StatusBadge";
 import clsx from "clsx";
 
@@ -29,6 +29,12 @@ export interface PredictResult {
   gradcam_images_list?: string[];
   xai_error?: string | null;
   image_quality_warning?: string | null;
+  // Clinical Alert System
+  alert_level?: "high_risk" | "low_confidence" | "normal";
+  alert_message?: string | null;
+  skin_tone_reliability_note?: string | null;
+  ita_group?: string | null;
+  ita_value?: number | null;
   // Error fields
   error?: string;
   missing_path?: string;
@@ -174,7 +180,56 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
   const confidenceRating = confidence > 0.85 ? "High" : confidence > 0.6 ? "Moderate" : "Low";
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
+      {/* ── Clinical Alert Banner (High Risk) ── */}
+      {result.alert_level === "high_risk" && (
+        <div className="flex items-start gap-3.5 p-4.5 bg-[#FEF2F2] border border-[#FECACA] rounded-2xl shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-white border border-[#FECACA] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
+            <AlertOctagon size={18} className="text-[#DC2626]" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[13px] font-semibold text-[#991B1B]">
+              High-Risk Lesion Category Alert
+            </p>
+            <p className="text-[12px] text-[#B91C1C] leading-relaxed">
+              {result.alert_message ?? "This prediction falls into a higher-risk lesion category. Please consult a dermatologist promptly for professional evaluation."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Clinical Alert Banner (Low Confidence) ── */}
+      {result.alert_level === "low_confidence" && (
+        <div className="flex items-start gap-3.5 p-4.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-2xl shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-white border border-[#FDE68A] shadow-sm flex items-center justify-center flex-shrink-0 mt-0.5">
+            <AlertTriangle size={18} className="text-[#D97706]" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-[13px] font-semibold text-[#92400E]">
+              Low Confidence Prediction Note
+            </p>
+            <p className="text-[12px] text-[#B45309] leading-relaxed">
+              {result.alert_message ?? "The model's confidence in this prediction is relatively low. We recommend consulting a dermatologist for a definitive diagnosis."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Skin Tone Reliability Note (Informational Context) ── */}
+      {result.skin_tone_reliability_note && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl shadow-sm">
+          <Info size={15} className="text-[#0B7FEA] flex-shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="text-[11px] font-semibold text-[#0F172A] uppercase tracking-wider">
+              Skin-Tone Reliability Context {result.ita_group ? `(${result.ita_group.toUpperCase()})` : ""}
+            </p>
+            <p className="text-[12px] text-[#475569] leading-relaxed">
+              {result.skin_tone_reliability_note}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Main Insight */}
       <div className="space-y-3">
         <h3 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em]">

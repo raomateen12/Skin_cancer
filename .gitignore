@@ -17,11 +17,10 @@ checkpoints/
 *.pt
 *.zip
 
-# Dataset files
+# Dataset files (raw images/archives ignored; processed metadata CSVs tracked)
 data/raw/*
 !data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
+data/processed/smoke_test_*.csv
 
 # Generated results — not committed
 results/gradcam_samples/
@@ -37,6 +36,8 @@ results/*.csv
 # Calibration fairness — large per-image files (regeneratable, not needed on Colab)
 results/calibration_fairness/ita_validation_samples/
 results/calibration_fairness/corner_crops_zoomed/
+results/calibration_fairness/error_analysis_dark_nv/
+results/unet_sample_predictions/
 results/calibration_fairness/vignette_diagnostic.csv
 results/calibration_fairness/ita_formula_diagnostic.csv
 
@@ -55,5 +56,8 @@ vectorstore/faiss_index/
 data/medical_pdfs/*
 !data/medical_pdfs/.gitkeep
 .env
+.env.*
 .env.local
 reference_ui/
+scratch/
+

@@ -1,0 +1,7 @@
+analysis_type,ita_group,n_samples,nv_base_rate,brier_score,reliability_rel,resolution_res,uncertainty_unc,check_rel_minus_res_plus_unc
+binary_nv_vs_all (one-vs-rest detection),light,540,0.7204,0.0446,0.0089,0.1657,0.2014,0.0446
+binary_nv_vs_all (one-vs-rest detection),intermediate,97,0.7938,0.0627,0.028,0.128,0.1637,0.0636
+binary_nv_vs_all (one-vs-rest detection),dark,345,0.5594,0.1163,0.0504,0.1803,0.2465,0.1165
+within_nv_class (class-stratified multiclass),light,389,1.0,0.088,0.0874,0.0,0.0,0.0874
+within_nv_class (class-stratified multiclass),intermediate,77,1.0,0.1189,0.1186,0.0,0.0,0.1186
+within_nv_class (class-stratified multiclass),dark,193,1.0,0.3184,0.3173,0.0,0.0,0.3173

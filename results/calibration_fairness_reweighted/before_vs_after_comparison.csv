@@ -1,0 +1,5 @@
+metric,baseline_dark,reweighted_dark,baseline_light,reweighted_light,baseline_gap (dark-light),reweighted_gap (dark-light),gap_change
+overall_accuracy (light+inter+dark),0.7913,0.6058,0.8963,0.813,-0.105,-0.2072,-0.1022
+overall_brier,0.3049,0.5517,0.1583,0.2711,0.1467,0.2806,0.134
+full_model_accuracy (all groups incl. unknown),n/a,n/a,0.8605,0.7403,n/a,n/a,-0.1202
+nv_class_brier light-vs-dark gap (positive = dark worse),n/a,n/a,n/a,n/a,"0.2307 (CI=[0.1123,0.3596], sig=True)","0.5449 (CI=[0.3591,0.7286], sig=True)",0.3142

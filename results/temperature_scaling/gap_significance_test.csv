@@ -1,0 +1,4 @@
+calibration,brier_dark,brier_light,diff_dark_minus_light,ci_lower,ci_upper,significant,n_dark,n_light
+uncalibrated,0.3049,0.1583,0.1468,0.0807,0.2133,True,345,540
+global_temperature,0.304,0.1572,0.1477,0.0848,0.2126,True,345,540
+per_group_temperature,0.3043,0.1572,0.1484,0.0865,0.2063,True,345,540

@@ -1,0 +1,171 @@
+"""
+src/segmentation_dataset.py
+PyTorch Dataset and DataLoader utilities for binary skin lesion segmentation.
+
+Features:
+  - Synchronised geometric augmentations (flips, rotations) across image and mask pairs
+  - Bilinear interpolation for RGB images, Nearest Neighbor for binary masks
+  - ImageNet normalization for images, float tensor [1, H, W] in {0.0, 1.0} for masks
+"""
+
+from __future__ import annotations
+import random
+from pathlib import Path
+from typing import Tuple, Union
+
+import numpy as np
+import pandas as pd
+from PIL import Image
+import torch
+from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms.functional as TF
+import torchvision.transforms as T
+
+
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
+
+
+class SegmentationDataset(Dataset):
+    """
+    Dataset loading paired dermoscopy images and lesion boundary binary masks.
+
+    Parameters
+    ----------
+    data_source : str | Path | pd.DataFrame
+        CSV path or DataFrame with columns: image_id, image_path, mask_path
+    img_size : tuple[int, int], default=(224, 224)
+        Target dimensions (H, W) for network input
+    is_train : bool, default=True
+        If True, applies random synchronized geometric augmentations
+    normalize : bool, default=True
+        If True, applies ImageNet mean/std normalization to images
+    """
+
+    def __init__(
+        self,
+        data_source: Union[str, Path, pd.DataFrame],
+        img_size: Tuple[int, int] = (224, 224),
+        is_train: bool = True,
+        normalize: bool = True,
+    ):
+        super().__init__()
+        if isinstance(data_source, (str, Path)):
+            self.df = pd.read_csv(data_source)
+        elif isinstance(data_source, pd.DataFrame):
+            self.df = data_source.copy()
+        else:
+            raise TypeError(f"Unsupported data_source type: {type(data_source)}")
+
+        # Ensure required columns exist
+        required_cols = {"image_id", "image_path", "mask_path"}
+        missing = required_cols - set(self.df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns in dataset: {missing}")
+
+        self.img_size = img_size
+        self.is_train = is_train
+        self.normalize = normalize
+
+        self.norm_transform = T.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD) if normalize else None
+
+    def __len__(self) -> int:
+        return len(self.df)
+
+    def _apply_transforms(
+        self, image: Image.Image, mask: Image.Image
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # 1. Resize (Bilinear for Image, Nearest for Mask to avoid interpolation blur)
+        image = TF.resize(image, self.img_size, interpolation=TF.InterpolationMode.BILINEAR)
+        mask = TF.resize(mask, self.img_size, interpolation=TF.InterpolationMode.NEAREST)
+
+        # 2. Geometric augmentations (Synchronized for Training)
+        if self.is_train:
+            # Random horizontal flip
+            if random.random() > 0.5:
+                image = TF.hflip(image)
+                mask = TF.hflip(mask)
+
+            # Random vertical flip
+            if random.random() > 0.5:
+                image = TF.vflip(image)
+                mask = TF.vflip(mask)
+
+            # Random 90/180/270 degree rotation
+            if random.random() > 0.5:
+                angle = random.choice([90, 180, 270])
+                image = TF.rotate(image, angle)
+                mask = TF.rotate(mask, angle)
+
+            # Subtle random rotation (-15 to 15 deg)
+            if random.random() > 0.5:
+                angle = random.uniform(-15.0, 15.0)
+                image = TF.rotate(image, angle, interpolation=TF.InterpolationMode.BILINEAR)
+                mask = TF.rotate(mask, angle, interpolation=TF.InterpolationMode.NEAREST)
+
+        # 3. Convert Image to Tensor [3, H, W] (0.0 to 1.0)
+        img_tensor = TF.to_tensor(image)
+        if self.norm_transform is not None:
+            img_tensor = self.norm_transform(img_tensor)
+
+        # 4. Convert Mask to Tensor [1, H, W] ({0.0, 1.0})
+        mask_np = np.array(mask, dtype=np.float32)
+        # Threshold at 128 (ISIC masks are 0 or 255)
+        mask_binary = (mask_np >= 128.0).astype(np.float32)
+        if mask_binary.ndim == 2:
+            mask_tensor = torch.from_numpy(mask_binary).unsqueeze(0)  # [1, H, W]
+        else:
+            mask_tensor = torch.from_numpy(mask_binary[:, :, 0]).unsqueeze(0)
+
+        return img_tensor, mask_tensor
+
+    def __getitem__(self, idx: int) -> dict[str, Union[torch.Tensor, str]]:
+        row = self.df.iloc[idx]
+        img_path = str(row["image_path"])
+        mask_path = str(row["mask_path"])
+        image_id = str(row["image_id"])
+
+        image = Image.open(img_path).convert("RGB")
+        mask = Image.open(mask_path).convert("L")
+
+        img_tensor, mask_tensor = self._apply_transforms(image, mask)
+
+        return {
+            "image": img_tensor,
+            "mask": mask_tensor,
+            "image_id": image_id,
+            "image_path": img_path,
+            "mask_path": mask_path,
+        }
+
+
+def get_segmentation_loaders(
+    train_csv: Union[str, Path, pd.DataFrame],
+    val_csv: Union[str, Path, pd.DataFrame],
+    batch_size: int = 16,
+    img_size: Tuple[int, int] = (224, 224),
+    num_workers: int = 0,
+    pin_memory: bool = True,
+) -> Tuple[DataLoader, DataLoader]:
+    """Factory helper to build Train and Validation DataLoader instances."""
+    train_ds = SegmentationDataset(train_csv, img_size=img_size, is_train=True)
+    val_ds = SegmentationDataset(val_csv, img_size=img_size, is_train=False)
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=pin_memory and torch.cuda.is_available(),
+        drop_last=len(train_ds) > batch_size,
+    )
+
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory and torch.cuda.is_available(),
+    )
+
+    return train_loader, val_loader

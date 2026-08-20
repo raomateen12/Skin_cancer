@@ -1,0 +1,34 @@
+sample_index,subset,image_id,true_dx,pred_dx,confidence,p_nv,ita_value,sharpness_laplacian_var,contrast_std,hair_density_blackhat,edge_density_canny,visualization_file
+1,misclassified (wrong),ISIC_0033411,nv,bkl,0.4919,0.4633,-66.38,25.56,14.98,0.0067,0.0023,misclassified_01_ISIC_0033411_true_nv_pred_bkl.png
+2,misclassified (wrong),ISIC_0027471,nv,bkl,0.9261,0.0345,-86.79,22.92,13.31,0.0131,0.0032,misclassified_02_ISIC_0027471_true_nv_pred_bkl.png
+3,misclassified (wrong),ISIC_0033139,nv,bkl,0.5059,0.4625,-5.67,138.91,21.46,0.0644,0.038,misclassified_03_ISIC_0033139_true_nv_pred_bkl.png
+4,misclassified (wrong),ISIC_0034127,nv,mel,0.5574,0.4385,-49.75,190.87,39.91,0.1338,0.0306,misclassified_04_ISIC_0034127_true_nv_pred_mel.png
+5,misclassified (wrong),ISIC_0029445,nv,bkl,0.4585,0.1844,-28.0,27.08,24.17,0.0025,0.0013,misclassified_05_ISIC_0029445_true_nv_pred_bkl.png
+6,misclassified (wrong),ISIC_0033703,nv,mel,0.6707,0.2654,-76.73,79.88,56.37,0.062,0.0243,misclassified_06_ISIC_0033703_true_nv_pred_mel.png
+7,misclassified (wrong),ISIC_0032663,nv,bkl,0.418,0.415,-76.86,46.46,51.52,0.0314,0.0149,misclassified_07_ISIC_0032663_true_nv_pred_bkl.png
+8,misclassified (wrong),ISIC_0033926,nv,mel,0.5082,0.4823,-53.38,30.22,38.83,0.0139,0.0019,misclassified_08_ISIC_0033926_true_nv_pred_mel.png
+9,misclassified (wrong),ISIC_0026964,nv,bkl,0.7035,0.0919,-46.19,369.74,49.58,0.2294,0.0979,misclassified_09_ISIC_0026964_true_nv_pred_bkl.png
+10,misclassified (wrong),ISIC_0032860,nv,vasc,0.9579,0.0034,-72.78,64.88,33.7,0.044,0.007,misclassified_10_ISIC_0032860_true_nv_pred_vasc.png
+11,misclassified (wrong),ISIC_0030053,nv,mel,0.5965,0.3287,-81.09,53.69,29.87,0.0335,0.0044,misclassified_11_ISIC_0030053_true_nv_pred_mel.png
+12,misclassified (wrong),ISIC_0031411,nv,mel,0.7161,0.2749,-88.51,74.72,38.23,0.0794,0.0186,misclassified_12_ISIC_0031411_true_nv_pred_mel.png
+13,misclassified (wrong),ISIC_0027073,nv,bkl,0.6518,0.2507,-6.43,87.94,26.43,0.0581,0.0257,misclassified_13_ISIC_0027073_true_nv_pred_bkl.png
+14,misclassified (wrong),ISIC_0032682,nv,bkl,0.7336,0.2516,-49.64,284.89,28.54,0.068,0.0293,misclassified_14_ISIC_0032682_true_nv_pred_bkl.png
+15,misclassified (wrong),ISIC_0027235,nv,mel,0.7948,0.2012,-88.47,56.85,34.5,0.0294,0.0105,misclassified_15_ISIC_0027235_true_nv_pred_mel.png
+1,correctly_classified,ISIC_0031992,nv,nv,0.9964,0.9964,-84.66,39.42,24.14,0.0091,0.0006,correct_01_ISIC_0031992_true_nv_pred_nv.png
+2,correctly_classified,ISIC_0024466,nv,nv,0.6033,0.6033,-75.72,76.91,21.5,0.0614,0.0257,correct_02_ISIC_0024466_true_nv_pred_nv.png
+3,correctly_classified,ISIC_0032541,nv,nv,0.9786,0.9786,-72.16,25.33,20.56,0.0065,0.0046,correct_03_ISIC_0032541_true_nv_pred_nv.png
+4,correctly_classified,ISIC_0033250,nv,nv,0.934,0.934,-77.4,44.04,38.62,0.0218,0.0093,correct_04_ISIC_0033250_true_nv_pred_nv.png
+5,correctly_classified,ISIC_0027600,nv,nv,0.9883,0.9883,-86.94,38.84,16.99,0.0139,0.0009,correct_05_ISIC_0027600_true_nv_pred_nv.png
+6,correctly_classified,ISIC_0032911,nv,nv,0.8481,0.8481,-80.86,13.23,19.51,0.0006,0.0001,correct_06_ISIC_0032911_true_nv_pred_nv.png
+7,correctly_classified,ISIC_0033963,nv,nv,0.7399,0.7399,-29.81,38.47,31.44,0.0143,0.0062,correct_07_ISIC_0033963_true_nv_pred_nv.png
+8,correctly_classified,ISIC_0028598,nv,nv,0.9806,0.9806,-48.48,18.31,19.98,0.0069,0.0019,correct_08_ISIC_0028598_true_nv_pred_nv.png
+9,correctly_classified,ISIC_0032838,nv,nv,0.598,0.598,-45.0,45.24,28.52,0.0189,0.0035,correct_09_ISIC_0032838_true_nv_pred_nv.png
+10,correctly_classified,ISIC_0033421,nv,nv,0.9723,0.9723,-62.21,67.54,23.4,0.0526,0.0102,correct_10_ISIC_0033421_true_nv_pred_nv.png
+11,correctly_classified,ISIC_0027537,nv,nv,0.7195,0.7195,-81.02,61.58,20.95,0.0339,0.0125,correct_11_ISIC_0027537_true_nv_pred_nv.png
+12,correctly_classified,ISIC_0032363,nv,nv,0.6481,0.6481,-88.96,61.26,33.8,0.0197,0.0092,correct_12_ISIC_0032363_true_nv_pred_nv.png
+13,correctly_classified,ISIC_0032443,nv,nv,0.8923,0.8923,-37.6,168.86,31.3,0.1013,0.0527,correct_13_ISIC_0032443_true_nv_pred_nv.png
+14,correctly_classified,ISIC_0031293,nv,nv,0.8722,0.8722,-88.23,23.65,25.45,0.0055,0.0013,correct_14_ISIC_0031293_true_nv_pred_nv.png
+15,correctly_classified,ISIC_0032957,nv,nv,0.964,0.964,-80.37,40.04,29.18,0.0282,0.0045,correct_15_ISIC_0032957_true_nv_pred_nv.png
+MEAN,misclassified (wrong),n=15,nv,distribution,0.6461,0.2766,-58.44,103.64,33.43,0.058,0.0207,---
+MEAN,correctly_classified,n=15,nv,nv,0.849,0.849,-69.29,50.85,25.69,0.0263,0.0095,---
+DIFFERENCE,wrong_minus_correct,delta,---,---,-0.203,-0.5725,10.85,52.79,7.74,0.0317,0.0111,---

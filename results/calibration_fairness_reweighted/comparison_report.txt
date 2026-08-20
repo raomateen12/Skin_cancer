@@ -1,0 +1,70 @@
+========================================================================
+  DermaLens AI — Calibration Fairness: Reweighted vs Baseline
+========================================================================
+
+Checkpoints compared:
+  Baseline   : checkpoints/best_efficientnet_b0.pth
+  Reweighted : checkpoints/best_efficientnet_b0_reweighted.pth
+  Test set   : data/processed/test_with_ita.csv  (same for both)
+
+========================================================================
+  (a) Did overall accuracy drop, and by how much?
+========================================================================
+
+  Full-model accuracy (light+intermediate+dark groups combined):
+    Baseline   : 0.8605
+    Reweighted : 0.7403
+    Change     : -0.1202
+
+  Per-group accuracy:
+    Group            Baseline  Reweighted    Change
+    --------------------------------------------------
+    light              0.8963      0.8130   -0.0833
+    intermediate       0.9072      0.8144   -0.0928
+    dark               0.7913      0.6058   -0.1855
+
+  VERDICT (a): Overall accuracy DROPPED by 12.02 percentage points.
+
+========================================================================
+  (b) Did the nv-class dark-vs-light Brier gap shrink, stay, or grow?
+========================================================================
+
+  Overall Brier score (dark - light gap, positive = dark is worse):
+    Baseline   dark Brier  : 0.3049  |  light Brier: 0.1583  |  gap: +0.1467
+    Reweighted dark Brier  : 0.5517  |  light Brier: 0.2711  |  gap: +0.2806
+    Gap change             : +0.1340
+
+  nv-CLASS Brier gap (dark - light), the PRIMARY fairness metric:
+    Baseline   : +0.2307  (CI=[0.1123,0.3596], sig=True)
+    Reweighted : +0.5449  (CI=[0.3591,0.7286], sig=True)
+    Gap change : +0.3142
+
+  VERDICT (b): nv-class dark-vs-light Brier gap GREW by 0.3142.
+
+========================================================================
+  (c) Is the change statistically meaningful?
+========================================================================
+
+  The baseline and reweighted analyses each produce 95% bootstrap CIs.
+  We compare the gap confidence intervals to assess overlap/separation:
+
+  Baseline   nv gap 95% CI: [0.1123, 0.3596]  significant=True
+  Reweighted nv gap 95% CI: [0.3591, 0.7286]  significant=True
+
+  Both gaps are individually statistically significant.
+  The two CIs OVERLAP (overlap = 0.0005). The gap change is NOT conclusively significant — the difference could be sampling variability alone.
+
+  NOTE: This is a within-checkpoint comparison, not a formal two-sample
+  test of gap-change significance. For a definitive conclusion, a direct
+  permutation test on (gap_rw - gap_baseline) would be needed, requiring
+  storing per-sample predictions from both runs simultaneously.
+
+========================================================================
+  Output files (all in results/calibration_fairness_reweighted/):
+========================================================================
+  calibration_by_ita_group.csv    — per-group ECE/MCE/Brier/accuracy
+  significance_tests.csv          — matched bootstrap significance
+  class_stratified_analysis.csv   — nv-class within-group comparison
+  before_vs_after_comparison.csv  — side-by-side baseline vs reweighted
+  comparison_report.txt           — this file
+========================================================================

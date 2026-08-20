@@ -1,0 +1,59 @@
+========================================================================
+  DermaLens AI — Formal Brier Score Decomposition Report
+========================================================================
+
+Methodology: Standard Murphy (1973) Three-Term Decomposition
+Formula: Brier = Reliability - Resolution + Uncertainty
+Bins: 15 uniform bins on forecast confidence
+
+Decomposition Terms Definition:
+  - Reliability (REL >= 0): Calibration error. Measures distance between
+    predicted probability and empirical frequency within each bin. (Lower is better)
+  - Resolution (RES >= 0): Discrimination ability. Measures how much bin-specific
+    frequencies differ from overall base rate. (Higher is better, subtracted)
+  - Uncertainty (UNC >= 0): Inherent sample variance (base rate entropy).
+    Defined as p_bar * (1 - p_bar). Maximum at 50% base rate.
+
+========================================================================
+  1. ONE-VS-REST BINARY NV DETECTION PERSPECTIVE (Across All Test Samples)
+========================================================================
+
+  Light Group (n=540, BaseRate=72.0%):
+    Brier = 0.0446  |  Rel = 0.0089  |  Res = 0.1657  |  Unc = 0.2014
+  Dark Group  (n=345, BaseRate=55.9%):
+    Brier = 0.1163  |  Rel = 0.0504  |  Res = 0.1803  |  Unc = 0.2465
+
+  Gap Breakdown (Dark - Light = +0.0717 total Brier gap):
+    + Reliability Gap (Calibration Error) : +0.0415  (57.9% of total gap)
+    - Resolution Gap  (Discrimination)    : -0.0146  (Dark has +0.0146 higher raw resolution)
+    + Uncertainty Gap (Base Rate Imbalance): +0.0451  (62.9% of total gap)
+
+========================================================================
+  2. CLASS-STRATIFIED WITHIN-NV SUBSET PERSPECTIVE (True Label = nv)
+========================================================================
+
+  Light Group nv (n=389): Brier = 0.0880  |  Rel = 0.0874  (Res=0, Unc=0)
+  Dark Group nv  (n=193): Brier = 0.3184  |  Rel = 0.3173  (Res=0, Unc=0)
+
+  Within-nv Brier Gap (Dark - Light = +0.2304):
+    100% of the within-class Brier gap (+0.2299) is pure squared deviation
+    from the true one-hot target, driven by false-negative misclassifications.
+
+========================================================================
+  PLAIN-ENGLISH VERDICT
+========================================================================
+
+  Question: Which term accounts for most of the Brier gap between dark and light?
+
+  Answer: Across the overall dataset, the Brier gap between dark and light skin tones
+  is driven primarily by Uncertainty (+0.0451) due to base rate imbalance
+  (nv accounts for 72.0% in light vs only 55.9% in dark) combined with Reliability
+  miscalibration (+0.0415).
+
+  Crucially, within the stratified nv-class subset where base rates are identical (100% nv),
+  the dark group suffers a massive Brier inflation (0.3184 vs 0.0880, gap = +0.2304).
+  Because temperature scaling failed to close this gap (T_dark=1.045), this confirms that
+  the disparity is NOT an artifact of probability overconfidence/underconfidence, but a
+  fundamental DISCRIMINATION FAILURE: the model systematically misclassifies dark-skin nv
+  as melanoma (mel) and benign keratosis (bkl) at an error rate of 22.3% (vs 5.7% in light skin).
+========================================================================

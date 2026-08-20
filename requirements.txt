@@ -15,7 +15,7 @@ pyyaml
 plotly
 streamlit
 shap
-grad-cam
+grad-cam==1.5.5
 langchain
 langchain-community
 langchain-huggingface

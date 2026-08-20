@@ -1,15 +1,44 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, WifiOff, Globe, FileText, ArrowRight } from "lucide-react";
+import {
+  Send, WifiOff, Globe, FileText, ArrowRight,
+  CheckCircle, AlertTriangle, ShieldAlert, Info
+} from "lucide-react";
 import clsx from "clsx";
 import { askAssistant } from "@/lib/api";
 import SafetyNote from "@/components/shared/SafetyNote";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Citation {
+  marker: number;
+  source: string;
+  page: number | string;
+  chunk_text_snippet: string;
+}
+
+interface SentenceVerification {
+  text: string;
+  status: "SUPPORTED" | "PARTIAL" | "UNSUPPORTED";
+  citation_markers?: number[];
+}
+
+interface VerificationSummary {
+  total: number;
+  supported: number;
+  partial: number;
+  unsupported: number;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
-  sources?: Array<{ source: string; page: number }>;
+  answer_html?: string;
+  sources?: Array<{ source: string; page: number | string }>;
+  citations?: Citation[];
+  sentences?: SentenceVerification[];
+  verification_summary?: VerificationSummary;
   language?: string;
 }
 
@@ -25,6 +54,156 @@ const SUGGESTED_QUESTIONS = [
   "What is the ABCDE rule for moles?",
   "When should I see a dermatologist?",
 ];
+
+// ── Citation Popup Component ──────────────────────────────────────────────────
+
+function CitationPopup({ citation, onClose }: { citation: Citation; onClose: () => void }) {
+  return (
+    <div
+      className="absolute z-50 bottom-full left-0 mb-1 w-72 bg-white border border-[#CBD5E1] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] p-4 text-left"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <FileText size={12} className="text-[#0B7FEA] flex-shrink-0" />
+          <span className="text-[11px] font-semibold text-[#0F172A]">{citation.source}</span>
+        </div>
+        <span className="text-[10px] text-[#64748B] font-medium whitespace-nowrap">p. {citation.page}</span>
+      </div>
+      {citation.chunk_text_snippet && (
+        <p className="text-[11px] text-[#475569] leading-relaxed line-clamp-4 border-t border-[#F1F5F9] pt-2 mt-2">
+          {citation.chunk_text_snippet}
+        </p>
+      )}
+      <button
+        onClick={onClose}
+        className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[#94A3B8] hover:text-[#475569] text-[14px] font-medium leading-none"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ── Inline Citation Superscript ───────────────────────────────────────────────
+
+function CitationMarker({ marker, citations }: { marker: number; citations: Citation[] }) {
+  const [open, setOpen] = useState(false);
+  const citation = citations.find((c) => c.marker === marker);
+  if (!citation) return <sup className="text-[10px] text-[#0B7FEA]">[{marker}]</sup>;
+
+  return (
+    <span className="relative inline-block">
+      <sup
+        className="cursor-pointer text-[#0B7FEA] hover:text-[#0ea5e9] font-semibold text-[10px] transition-colors ml-0.5"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        title={`Source: ${citation.source}, p.${citation.page}`}
+      >
+        [{marker}]
+      </sup>
+      {open && <CitationPopup citation={citation} onClose={() => setOpen(false)} />}
+    </span>
+  );
+}
+
+// ── Verified Answer Renderer ──────────────────────────────────────────────────
+
+function VerifiedAnswer({
+  sentences,
+  citations,
+  plainText,
+}: {
+  sentences?: SentenceVerification[];
+  citations?: Citation[];
+  plainText: string;
+}) {
+  if (!sentences || sentences.length === 0) {
+    return (
+      <span className="break-words" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        {plainText}
+      </span>
+    );
+  }
+
+  return (
+    <span>
+      {sentences.map((sent, i) => {
+        const isUnsupported = sent.status === "UNSUPPORTED";
+        const isPartial = sent.status === "PARTIAL";
+
+        return (
+          <span key={i} className="relative group/sent">
+            <span
+              className={clsx(
+                "break-words",
+                isUnsupported && "underline decoration-amber-400 decoration-dotted underline-offset-2 cursor-help bg-amber-50/50",
+                isPartial && "underline decoration-slate-300 decoration-dotted underline-offset-2"
+              )}
+              title={
+                isUnsupported
+                  ? "Warning: This statement could not be directly verified against the source documents."
+                  : isPartial
+                  ? "Note: This statement is partially supported by the source documents."
+                  : undefined
+              }
+            >
+              {sent.text}
+            </span>
+            {/* Inline citation markers after each sentence */}
+            {citations && sent.citation_markers && sent.citation_markers.length > 0 && (
+              <span className="inline-flex items-center gap-0.5 ml-0.5">
+                {sent.citation_markers.map((m) => (
+                  <CitationMarker key={m} marker={m} citations={citations} />
+                ))}
+              </span>
+            )}
+            {isUnsupported && (
+              <span className="inline-block ml-1 align-middle opacity-80" title="Unverified statement">
+                <AlertTriangle size={11} className="text-amber-500 inline" />
+              </span>
+            )}
+            {" "}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+// ── Verification Badge ────────────────────────────────────────────────────────
+
+function VerificationBadge({ summary }: { summary: VerificationSummary }) {
+  const allSupported = summary.unsupported === 0 && summary.partial === 0;
+  const hasUnsupported = summary.unsupported > 0;
+
+  return (
+    <div
+      className={clsx(
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border",
+        allSupported
+          ? "bg-[#F0FDF4] border-[#BBF7D0] text-[#16A34A]"
+          : hasUnsupported
+          ? "bg-[#FFFBEB] border-[#FDE68A] text-[#B45309]"
+          : "bg-[#F8FAFC] border-[#E2E8F0] text-[#475569]"
+      )}
+      title={`${summary.supported} supported, ${summary.partial} partial, ${summary.unsupported} unsupported out of ${summary.total} total statements`}
+    >
+      {allSupported ? (
+        <CheckCircle size={11} />
+      ) : hasUnsupported ? (
+        <ShieldAlert size={11} />
+      ) : (
+        <Info size={11} />
+      )}
+      {summary.supported}/{summary.total} statements verified
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function AssistantChat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -64,7 +243,11 @@ export default function AssistantChat() {
           {
             role: "assistant",
             content: result.answer,
+            answer_html: result.answer_html,
             sources: result.sources,
+            citations: result.citations ?? [],
+            sentences: result.sentences ?? [],
+            verification_summary: result.verification_summary,
             language: result.language_detected,
           },
         ]);
@@ -86,7 +269,7 @@ export default function AssistantChat() {
         <div>
           <h2 className="font-display text-2xl font-semibold text-[#0F172A]">Clinical Assistant</h2>
           <p className="text-[14px] text-[#64748B] mt-1.5">
-            Document-grounded Q&amp;A referencing indexed dermatology literature.
+            Document-grounded Q&amp;A with citation verification.
           </p>
         </div>
       </div>
@@ -97,11 +280,10 @@ export default function AssistantChat() {
 
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto space-y-6 pb-[180px] md:pb-32 scrollbar-hide">
-        {/* Empty state / Offline state */}
+        {/* Empty / Offline state */}
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-start pt-4 sm:pt-0 sm:justify-center h-full min-h-[400px]">
             {unavailable ? (
-              /* Offline card */
               <div className="w-full max-w-md bg-white border border-[#E2E8F0] rounded-[1.25rem] p-8 shadow-soft text-center">
                 <div className="w-12 h-12 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center mx-auto mb-5 shadow-sm">
                   <WifiOff size={20} className="text-[#94A3B8]" />
@@ -117,14 +299,13 @@ export default function AssistantChat() {
                 </p>
               </div>
             ) : (
-              /* Normal empty state */
               <>
                 <div className="w-16 h-16 rounded-2xl bg-white border border-[#E2E8F0] shadow-soft flex items-center justify-center mb-6">
                   <FileText size={24} className="text-[#0B7FEA]" />
                 </div>
                 <h3 className="font-display text-[18px] font-medium text-[#0F172A] mb-2 tracking-tight">How can I help?</h3>
                 <p className="text-[13px] text-[#64748B] text-center max-w-sm mb-8 leading-relaxed">
-                  Ask questions about skin conditions, warning signs, or next steps. All answers are grounded in provided medical documents.
+                  Ask questions about skin conditions, warning signs, or next steps. Answers include source citations and verification status.
                 </p>
                 <div className="w-full max-w-2xl grid sm:grid-cols-2 gap-3 sm:gap-4 px-1 sm:px-0">
                   {SUGGESTED_QUESTIONS.map((q) => (
@@ -168,11 +349,40 @@ export default function AssistantChat() {
                     : "bg-white border border-[#E2E8F0] text-[#475569] rounded-tl-[4px] shadow-soft"
                 )}
               >
-                <span className="break-words" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.content}</span>
+                {msg.role === "assistant" && msg.sentences && msg.sentences.length > 0 ? (
+                  <VerifiedAnswer
+                    sentences={msg.sentences}
+                    citations={msg.citations}
+                    plainText={msg.content}
+                  />
+                ) : (
+                  <span className="break-words" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {msg.content}
+                  </span>
+                )}
               </div>
 
-              {/* Sources */}
-              {msg.sources && msg.sources.length > 0 && (
+              {/* Verification badge + citation markers row (ONLY if grounded with citations) */}
+              {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 pl-1">
+                  {/* Verification badge */}
+                  {msg.verification_summary && (
+                    <VerificationBadge summary={msg.verification_summary} />
+                  )}
+
+                  {/* Citation markers as clickable chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {msg.citations.map((cit) => (
+                      <span key={cit.marker} className="relative group/cit">
+                        <CitationMarker marker={cit.marker} citations={msg.citations!} />
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sources (ONLY if grounded with citations) */}
+              {msg.citations && msg.citations.length > 0 && msg.sources && msg.sources.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1 pl-1">
                   {msg.sources.map((src, si) => (
                     <span
@@ -183,6 +393,17 @@ export default function AssistantChat() {
                       {src.source} (p.{src.page})
                     </span>
                   ))}
+                </div>
+              )}
+
+              {/* Unsupported warning legend (only if any unsupported exist and grounded) */}
+              {msg.citations && msg.citations.length > 0 && msg.verification_summary && msg.verification_summary.unsupported > 0 && (
+                <div className="flex items-start gap-1.5 px-3 py-2 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg text-[10px] text-[#92400E] mt-1">
+                  <AlertTriangle size={10} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <span>
+                    {msg.verification_summary.unsupported} statement{msg.verification_summary.unsupported > 1 ? "s" : ""} could not be
+                    directly verified against source documents. Dotted underline indicates unverified content.
+                  </span>
                 </div>
               )}
             </div>
@@ -209,8 +430,6 @@ export default function AssistantChat() {
 
         <div ref={endRef} />
       </div>
-
-
 
       {/* Input Area (Fixed at bottom) */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F8FAFC] via-[#F8FAFC] to-transparent pt-8 pb-[84px] md:pb-2 z-20 px-4 sm:px-6 md:px-0">

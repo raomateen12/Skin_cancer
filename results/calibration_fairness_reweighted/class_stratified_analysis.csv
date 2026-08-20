@@ -1,0 +1,4 @@
+dx_class,group_a,group_b,n_a,n_b,brier_diff,ci_lower,ci_upper,significant
+nv,light,dark,389,193,-0.544944,-0.728563,-0.359131,True
+nv,light,intermediate,389,77,0.014133,-0.156252,0.177304,False
+nv,intermediate,dark,77,193,-0.559077,-0.725634,-0.381892,True

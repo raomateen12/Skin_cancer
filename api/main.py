@@ -94,6 +94,8 @@ LABEL_NAMES: dict[str, str] = {
     "vasc": "Vascular Lesion",
 }
 
+HIGH_RISK_CLASSES: set[str] = {"mel", "bcc", "akiec"}
+
 CONCERN_MAP: dict[str, str] = {
     "akiec": "moderate",
     "bcc": "high",
@@ -396,6 +398,21 @@ def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
         return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+def _check_vectorstore() -> bool:
+    """Return True if the FAISS index exists on disk."""
+    return (RAG_INDEX_PATH / "index.faiss").exists()
+
+
+def _check_rag_dependencies() -> bool:
+    """Return True if RAG dependencies can be imported."""
+    try:
+        from langchain_community.vectorstores import FAISS  # noqa: F401
+        from langchain_huggingface import HuggingFaceEmbeddings  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 # ── Request/Response models ──────────────────────────────────────────────────
 
 class AskRequest(BaseModel):
@@ -554,6 +571,52 @@ async def predict(file: UploadFile = File(...)):
         if xai_error:
             logger.warning("XAI generation failed: %s", xai_error)
 
+        # ── Step 4: Clinical Alert System ────────────────────────────────────
+        if predicted_code in HIGH_RISK_CLASSES:
+            alert_level = "high_risk"
+            alert_message = (
+                "This prediction falls into a higher-risk lesion category. "
+                "Please consult a dermatologist promptly for professional evaluation."
+            )
+        elif confidence < 0.70:
+            alert_level = "low_confidence"
+            alert_message = (
+                "The model's confidence in this prediction is relatively low. "
+                "We recommend consulting a dermatologist for a definitive diagnosis."
+            )
+        else:
+            alert_level = "normal"
+            alert_message = None
+
+        # ── Step 5: Skin-tone ITA estimation & reliability check ─────────────
+        skin_tone_reliability_note: str | None = None
+        ita_value: float | None = None
+        ita_group: str | None = None
+
+        try:
+            from src.ita_utils import compute_ita_for_image, compute_ita_group, is_formula_unstable
+            ita_val, mean_b = compute_ita_for_image(contents)
+            unstable = is_formula_unstable(mean_b)
+            logger.info(
+                "ITA computation: raw_ita=%s  mean_b=%s  formula_unstable=%s",
+                f"{ita_val:.2f}" if ita_val is not None else "None",
+                f"{mean_b:.3f}" if mean_b is not None else "None",
+                unstable,
+            )
+            if ita_val is not None and not unstable:
+                group = compute_ita_group(ita_val)
+                ita_value = round(float(ita_val), 2)
+                ita_group = group
+                if group == "dark":
+                    skin_tone_reliability_note = (
+                        "Our internal calibration testing found this model shows somewhat lower reliability "
+                        "for this estimated skin-tone range. We recommend professional consultation with this in mind."
+                    )
+            elif unstable:
+                logger.info("ITA omitted: formula instability detected (|b*| < 5.0 or unreadable).")
+        except Exception as ita_exc:
+            logger.warning("ITA estimation failed (%s: %s) — omitting skin tone note", type(ita_exc).__name__, ita_exc, exc_info=True)
+
         return {
             "ok": True,
             "available": True,
@@ -573,6 +636,12 @@ async def predict(file: UploadFile = File(...)):
             "gradcam_images_list": xai.get("images_list"),
             "xai_error": xai_error,
             "image_quality_warning": image_quality_warning,
+            # Clinical Alert System fields
+            "alert_level": alert_level,
+            "alert_message": alert_message,
+            "skin_tone_reliability_note": skin_tone_reliability_note,
+            "ita_group": ita_group,
+            "ita_value": ita_value,
             "disclaimer": DISCLAIMER,
         }
 
@@ -641,6 +710,11 @@ async def ask(request: AskRequest):
             "language": result.get("language", request.language),
             "language_detected": result.get("language", request.language),
             "disclaimer": DISCLAIMER,
+            # New citation-grounding and hallucination-verification fields
+            "answer_html": result.get("answer_html"),
+            "citations": result.get("citations", []),
+            "sentences": result.get("sentences", []),
+            "verification_summary": result.get("verification_summary"),
         }
 
     except (ImportError, ModuleNotFoundError):
