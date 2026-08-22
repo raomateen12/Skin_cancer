@@ -144,19 +144,28 @@ def get_segmentation_loaders(
     val_csv: Union[str, Path, pd.DataFrame],
     batch_size: int = 16,
     img_size: Tuple[int, int] = (224, 224),
-    num_workers: int = 0,
+    num_workers: int = 4,
     pin_memory: bool = True,
+    persistent_workers: bool = True,
 ) -> Tuple[DataLoader, DataLoader]:
-    """Factory helper to build Train and Validation DataLoader instances."""
+    """Factory helper to build high-throughput Train and Validation DataLoader instances."""
     train_ds = SegmentationDataset(train_csv, img_size=img_size, is_train=True)
     val_ds = SegmentationDataset(val_csv, img_size=img_size, is_train=False)
+
+    use_cuda = torch.cuda.is_available()
+    pin = pin_memory and use_cuda
+
+    tr_workers = min(num_workers, len(train_ds)) if num_workers > 0 else 0
+    val_workers = min(num_workers, len(val_ds)) if num_workers > 0 else 0
 
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
-        pin_memory=pin_memory and torch.cuda.is_available(),
+        num_workers=tr_workers,
+        pin_memory=pin,
+        persistent_workers=persistent_workers and (tr_workers > 0),
+        prefetch_factor=2 if tr_workers > 0 else None,
         drop_last=len(train_ds) > batch_size,
     )
 
@@ -164,8 +173,11 @@ def get_segmentation_loaders(
         val_ds,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        pin_memory=pin_memory and torch.cuda.is_available(),
+        num_workers=val_workers,
+        pin_memory=pin,
+        persistent_workers=persistent_workers and (val_workers > 0),
+        prefetch_factor=2 if val_workers > 0 else None,
     )
 
     return train_loader, val_loader
+
