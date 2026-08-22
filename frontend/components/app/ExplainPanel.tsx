@@ -142,7 +142,7 @@ export default function ExplainPanel({
             </p>
           </div>
         ) : null}
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Original Image */}
           <div className="space-y-3">
             <p className="text-[11px] font-semibold text-[#64748B] uppercase tracking-[0.15em]">
@@ -230,7 +230,61 @@ export default function ExplainPanel({
               )}
             </div>
           </div>
+
+          {/* Lesion Boundary (U-Net Segmentation) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-[#64748B] uppercase tracking-[0.15em]">
+                Lesion Boundary
+              </p>
+              {result?.segmentation_available && (
+                <span className="text-[10px] font-medium text-[#0B7FEA] bg-[#EFF6FF] px-2 py-0.5 rounded-full border border-[#BFDBFE]">
+                  U-Net
+                </span>
+              )}
+            </div>
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl overflow-hidden shadow-soft aspect-square flex items-center justify-center p-2">
+              {result?.segmentation_available && result.segmentation_overlay ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={result.segmentation_overlay}
+                  alt="U-Net lesion boundary segmentation"
+                  className="w-full h-full object-cover rounded-[0.85rem]"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-center p-4">
+                  <div className="w-12 h-12 rounded-[14px] bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center">
+                    <Eye size={22} className="text-[#94A3B8]" />
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-medium text-[#475569]">
+                      Boundary segmentation
+                    </p>
+                    <p className="text-[11px] text-[#94A3B8] mt-1.5 leading-relaxed">
+                      {result?.seg_error ? "Segmentation unavailable for this input." : "U-Net boundary contour appears here after analysis."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* Morphological descriptors ribbon */}
+        {result?.segmentation_available && result.lesion_morphology && result.lesion_morphology.lesion_detected && (
+          <div className="mt-4 p-4 bg-white border border-[#E2E8F0] rounded-xl flex flex-wrap items-center justify-between gap-3 text-[12px] shadow-soft">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#0B7FEA]" />
+              <span className="font-medium text-[#0F172A]">U-Net Lesion Morphological Descriptors:</span>
+            </div>
+            <div className="flex items-center gap-4 text-[#475569]">
+              <span>Area: <strong className="text-[#0F172A]">{result.lesion_morphology.area_pct}%</strong> of FOV</span>
+              <span>Perimeter: <strong className="text-[#0F172A]">{result.lesion_morphology.perimeter_px} px</strong></span>
+              <span>Border Irregularity: <strong className="text-[#0F172A]">{result.lesion_morphology.border_irregularity_score}</strong></span>
+              <span>Compactness: <strong className="text-[#0F172A]">{result.lesion_morphology.compactness}</strong></span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom section: 2 columns */}

@@ -28,6 +28,24 @@ export interface PredictResult {
   gradcam_images?: { original: string; gradcam: string; eigencam: string } | null;
   gradcam_images_list?: string[];
   xai_error?: string | null;
+  // Segmentation
+  segmentation_available?: boolean;
+  segmentation_overlay?: string | null;
+  segmentation_mask?: string | null;
+  segmentation_heatmap?: string | null;
+  lesion_morphology?: {
+    lesion_detected?: boolean;
+    area_pct?: number;
+    perimeter_px?: number;
+    compactness?: number;
+    solidity?: number;
+    border_irregularity_score?: number;
+    aspect_ratio?: number;
+    centroid?: { x: number; y: number };
+    bounding_box?: { x: number; y: number; width: number; height: number };
+    num_lesion_components?: number;
+  } | null;
+  seg_error?: string | null;
   image_quality_warning?: string | null;
   // Clinical Alert System
   alert_level?: "high_risk" | "low_confidence" | "normal";

@@ -432,9 +432,14 @@ async def health():
     rag_deps_available = _check_rag_dependencies()
     rag_available = rag_index_available and rag_deps_available
 
+    unet_checkpoint = ROOT / "checkpoints" / "best_unet.pth"
+    unet_available = unet_checkpoint.exists()
+
     missing = []
     if not model_available:
         missing.append(str(CHECKPOINT_CANDIDATES[0].relative_to(ROOT)))
+    if not unet_available:
+        missing.append(str(unet_checkpoint.relative_to(ROOT)))
     if not class_mapping_available:
         missing.append(str(CLASS_MAPPING_PATH.relative_to(ROOT)))
     if not rag_index_available:
@@ -451,6 +456,8 @@ async def health():
         "status": "ok",
         "model_available": model_available,
         "checkpoint_path": str(CHECKPOINT_CANDIDATES[0].relative_to(ROOT)),
+        "unet_available": unet_available,
+        "unet_checkpoint_path": str(unet_checkpoint.relative_to(ROOT)) if unet_available else None,
         "class_mapping_available": class_mapping_available,
         "rag_available": rag_available,
         "rag_index_available": rag_index_available,
@@ -571,7 +578,31 @@ async def predict(file: UploadFile = File(...)):
         if xai_error:
             logger.warning("XAI generation failed: %s", xai_error)
 
-        # ── Step 4: Clinical Alert System ────────────────────────────────────
+        # ── Step 4: U-Net Lesion Boundary Segmentation ──────────────────────
+        seg_available = False
+        seg_overlay: str | None = None
+        seg_mask: str | None = None
+        seg_heatmap: str | None = None
+        seg_metrics: dict | None = None
+        seg_error: str | None = None
+
+        try:
+            from src.segmentation_inference import run_segmentation_inference
+            seg_res = run_segmentation_inference(contents)
+            if seg_res.get("available", False):
+                seg_available = True
+                seg_images = seg_res.get("images", {})
+                seg_overlay = seg_images.get("overlay")
+                seg_mask = seg_images.get("mask")
+                seg_heatmap = seg_images.get("heatmap")
+                seg_metrics = seg_res.get("metrics")
+            else:
+                seg_error = seg_res.get("error", "U-Net segmentation unavailable")
+        except Exception as seg_exc:
+            logger.warning("U-Net segmentation failed (%s: %s)", type(seg_exc).__name__, seg_exc, exc_info=True)
+            seg_error = f"{type(seg_exc).__name__}: {seg_exc}"
+
+        # ── Step 5: Clinical Alert System ────────────────────────────────────
         if predicted_code in HIGH_RISK_CLASSES:
             alert_level = "high_risk"
             alert_message = (
@@ -588,7 +619,7 @@ async def predict(file: UploadFile = File(...)):
             alert_level = "normal"
             alert_message = None
 
-        # ── Step 5: Skin-tone ITA estimation & reliability check ─────────────
+        # ── Step 6: Skin-tone ITA estimation & reliability check ─────────────
         skin_tone_reliability_note: str | None = None
         ita_value: float | None = None
         ita_group: str | None = None
@@ -635,6 +666,12 @@ async def predict(file: UploadFile = File(...)):
             "gradcam_images": xai.get("images"),
             "gradcam_images_list": xai.get("images_list"),
             "xai_error": xai_error,
+            "segmentation_available": seg_available,
+            "segmentation_overlay": seg_overlay,
+            "segmentation_mask": seg_mask,
+            "segmentation_heatmap": seg_heatmap,
+            "lesion_morphology": seg_metrics,
+            "seg_error": seg_error,
             "image_quality_warning": image_quality_warning,
             # Clinical Alert System fields
             "alert_level": alert_level,

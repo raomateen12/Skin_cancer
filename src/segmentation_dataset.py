@@ -58,10 +58,10 @@ class SegmentationDataset(Dataset):
             raise TypeError(f"Unsupported data_source type: {type(data_source)}")
 
         # Ensure required columns exist
-        required_cols = {"image_id", "image_path", "mask_path"}
-        missing = required_cols - set(self.df.columns)
-        if missing:
-            raise ValueError(f"Missing required columns in dataset: {missing}")
+        if "image_id" not in self.df.columns or "image_path" not in self.df.columns:
+            raise ValueError(f"Missing required columns (image_id, image_path) in dataset: {set(self.df.columns)}")
+
+        self.has_masks = "mask_path" in self.df.columns and self.df["mask_path"].notna().any()
 
         self.img_size = img_size
         self.is_train = is_train
@@ -119,14 +119,20 @@ class SegmentationDataset(Dataset):
 
         return img_tensor, mask_tensor
 
-    def __getitem__(self, idx: int) -> dict[str, Union[torch.Tensor, str]]:
+    def __getitem__(self, idx: int) -> dict[str, Union[torch.Tensor, str, bool]]:
         row = self.df.iloc[idx]
         img_path = str(row["image_path"])
-        mask_path = str(row["mask_path"])
         image_id = str(row["image_id"])
 
         image = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L")
+        has_gt = False
+
+        if "mask_path" in row and pd.notna(row["mask_path"]) and Path(str(row["mask_path"])).exists():
+            mask = Image.open(str(row["mask_path"])).convert("L")
+            has_gt = True
+        else:
+            # Create placeholder mask of same size as image
+            mask = Image.new("L", image.size, color=0)
 
         img_tensor, mask_tensor = self._apply_transforms(image, mask)
 
@@ -135,7 +141,8 @@ class SegmentationDataset(Dataset):
             "mask": mask_tensor,
             "image_id": image_id,
             "image_path": img_path,
-            "mask_path": mask_path,
+            "mask_path": str(row.get("mask_path", "")),
+            "has_ground_truth": has_gt,
         }
 
 
