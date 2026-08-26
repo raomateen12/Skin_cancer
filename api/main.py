@@ -14,6 +14,7 @@ Run:
 
 from __future__ import annotations
 
+import base64
 import io
 import os
 import json
@@ -21,6 +22,8 @@ import sys
 import logging
 from pathlib import Path
 from typing import Optional
+
+import numpy as np
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logger = logging.getLogger("dermalens")
@@ -468,7 +471,10 @@ async def health():
 
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+async def predict(
+    file: UploadFile = File(...),
+    include_counterfactuals: bool = False,
+):
     """
     Accept a skin lesion image and return an AI-assisted educational classification.
 
@@ -602,6 +608,37 @@ async def predict(file: UploadFile = File(...)):
             logger.warning("U-Net segmentation failed (%s: %s)", type(seg_exc).__name__, seg_exc, exc_info=True)
             seg_error = f"{type(seg_exc).__name__}: {seg_exc}"
 
+        # ── Step 4.5: Counterfactual ABCD Explainer (Optional) ───────────────
+        cf_available = False
+        cf_results: dict | None = None
+        cf_error: str | None = None
+
+        if include_counterfactuals:
+            if not seg_available or not seg_metrics or not seg_metrics.get("lesion_detected", False):
+                cf_available = False
+                cf_error = "No distinct lesion boundary detected for counterfactual perturbation."
+            else:
+                try:
+                    from src.counterfactual_explainer import generate_counterfactuals
+                    raw_mask_np = None
+                    if seg_mask:
+                        mask_raw_bytes = base64.b64decode(seg_mask.split(",")[1])
+                        mask_raw_pil = Image.open(io.BytesIO(mask_raw_bytes)).convert("L")
+                        raw_mask_np = (np.array(mask_raw_pil, dtype=np.float32) / 255.0 > 0.5).astype(np.float32)
+
+                    cf_res = generate_counterfactuals(
+                        image_input=contents,
+                        binary_mask=raw_mask_np,
+                    )
+                    if cf_res.get("available", False):
+                        cf_available = True
+                        cf_results = cf_res.get("counterfactuals")
+                    else:
+                        cf_error = cf_res.get("error", "Counterfactual generation unavailable")
+                except Exception as cf_exc:
+                    logger.warning("Counterfactual generation failed (%s: %s)", type(cf_exc).__name__, cf_exc, exc_info=True)
+                    cf_error = f"{type(cf_exc).__name__}: {cf_exc}"
+
         # ── Step 5: Clinical Alert System ────────────────────────────────────
         if predicted_code in HIGH_RISK_CLASSES:
             alert_level = "high_risk"
@@ -672,6 +709,9 @@ async def predict(file: UploadFile = File(...)):
             "segmentation_heatmap": seg_heatmap,
             "lesion_morphology": seg_metrics,
             "seg_error": seg_error,
+            "counterfactuals_available": cf_available,
+            "counterfactuals": cf_results,
+            "cf_error": cf_error,
             "image_quality_warning": image_quality_warning,
             # Clinical Alert System fields
             "alert_level": alert_level,

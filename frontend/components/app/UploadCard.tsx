@@ -9,9 +9,10 @@ interface UploadCardProps {
   onResult: (result: unknown) => void;
   onAnalyzing: (loading: boolean) => void;
   onImageSelected?: (url: string | null) => void;
+  onFileSelected?: (file: File | null) => void;
 }
 
-export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: UploadCardProps) {
+export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onFileSelected }: UploadCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -33,6 +34,7 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: U
     const url = URL.createObjectURL(f);
     setPreview(url);
     onImageSelected?.(url);
+    onFileSelected?.(f);
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -71,6 +73,7 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected }: U
     setPreview(null);
     setError(null);
     onImageSelected?.(null);
+    onFileSelected?.(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 

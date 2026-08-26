@@ -1,0 +1,174 @@
+[
+  {
+    "image_id": "ISIC_0024330",
+    "subfolder": "image1_df_ISIC_0024330",
+    "target_desc": "Dermatofibroma (Baseline)",
+    "orig_code": "df",
+    "orig_name": "Dermatofibroma",
+    "orig_conf": 0.465,
+    "perturbations": {
+      "border_irregularity": {
+        "name": "Border Irregularity",
+        "shifted": true,
+        "new_top_code": "bcc",
+        "new_top_name": "Basal Cell Carcinoma",
+        "new_top_conf": 0.8556,
+        "pert_orig_conf": 0.0564,
+        "conf_delta": -0.4086,
+        "mel_delta": -0.0083,
+        "summary": "This border irregularity change caused the model to reclassify the lesion as Basal Cell Carcinoma (85.6% confidence), shifting away from the original Dermatofibroma prediction (46.5% originally, now 5.6%). Melanoma probability moved from 2.2% to 1.3%."
+      },
+      "asymmetry": {
+        "name": "Lesion Asymmetry",
+        "shifted": false,
+        "new_top_code": "df",
+        "new_top_name": "Dermatofibroma",
+        "new_top_conf": 0.4802,
+        "pert_orig_conf": 0.4802,
+        "conf_delta": 0.0152,
+        "mel_delta": 0.0048,
+        "summary": "The primary classification remained Dermatofibroma with stable confidence (48.0% vs 46.5% originally). Melanoma probability remains low at 2.6% (from 2.2%)."
+      },
+      "diameter": {
+        "name": "Diameter Growth",
+        "shifted": false,
+        "new_top_code": "df",
+        "new_top_name": "Dermatofibroma",
+        "new_top_conf": 0.5439,
+        "pert_orig_conf": 0.5439,
+        "conf_delta": 0.0789,
+        "mel_delta": -0.0134,
+        "summary": "The primary classification remained Dermatofibroma, with confidence increased from 46.5% to 54.4% (+7.9%). Melanoma probability remains low at 0.8% (from 2.2%)."
+      }
+    }
+  },
+  {
+    "image_id": "ISIC_0025109",
+    "subfolder": "image2_nv_ISIC_0025109",
+    "target_desc": "Melanocytic Nevus (High Confidence)",
+    "orig_code": "nv",
+    "orig_name": "Melanocytic Nevus",
+    "orig_conf": 0.9914,
+    "perturbations": {
+      "border_irregularity": {
+        "name": "Border Irregularity",
+        "shifted": false,
+        "new_top_code": "nv",
+        "new_top_name": "Melanocytic Nevus",
+        "new_top_conf": 0.9499,
+        "pert_orig_conf": 0.9499,
+        "conf_delta": -0.0414,
+        "mel_delta": 0.002,
+        "summary": "The primary classification remained Melanocytic Nevus with stable confidence (95.0% vs 99.1% originally). Melanoma probability remains low at 0.3% (from 0.1%)."
+      },
+      "asymmetry": {
+        "name": "Lesion Asymmetry",
+        "shifted": false,
+        "new_top_code": "nv",
+        "new_top_name": "Melanocytic Nevus",
+        "new_top_conf": 0.9704,
+        "pert_orig_conf": 0.9704,
+        "conf_delta": -0.021,
+        "mel_delta": 0.0016,
+        "summary": "The primary classification remained Melanocytic Nevus with stable confidence (97.0% vs 99.1% originally). Melanoma probability remains low at 0.3% (from 0.1%)."
+      },
+      "diameter": {
+        "name": "Diameter Growth",
+        "shifted": false,
+        "new_top_code": "nv",
+        "new_top_name": "Melanocytic Nevus",
+        "new_top_conf": 0.9737,
+        "pert_orig_conf": 0.9737,
+        "conf_delta": -0.0176,
+        "mel_delta": 0.0005,
+        "summary": "The primary classification remained Melanocytic Nevus with stable confidence (97.4% vs 99.1% originally). Melanoma probability remains low at 0.2% (from 0.1%)."
+      }
+    }
+  },
+  {
+    "image_id": "ISIC_0027904",
+    "subfolder": "image3_mel_ISIC_0027904",
+    "target_desc": "Melanoma (Moderate Confidence)",
+    "orig_code": "mel",
+    "orig_name": "Melanoma",
+    "orig_conf": 0.6525,
+    "perturbations": {
+      "border_irregularity": {
+        "name": "Border Irregularity",
+        "shifted": true,
+        "new_top_code": "akiec",
+        "new_top_name": "Actinic Keratosis / Bowen's Disease",
+        "new_top_conf": 0.3505,
+        "pert_orig_conf": 0.1504,
+        "conf_delta": -0.5022,
+        "mel_delta": -0.5022,
+        "summary": "This border irregularity change caused the model to reclassify the lesion as Actinic Keratosis / Bowen's Disease (35.1% confidence), shifting away from the original Melanoma prediction (65.3% originally, now 15.0%). Melanoma probability moved from 65.3% to 15.0%."
+      },
+      "asymmetry": {
+        "name": "Lesion Asymmetry",
+        "shifted": false,
+        "new_top_code": "mel",
+        "new_top_name": "Melanoma",
+        "new_top_conf": 0.5677,
+        "pert_orig_conf": 0.5677,
+        "conf_delta": -0.0848,
+        "mel_delta": -0.0848,
+        "summary": "The primary classification remained Melanoma, with confidence decreased from 65.3% to 56.8% (-8.5%). Melanoma risk declined from 65.3% to 56.8% (-8.5%)."
+      },
+      "diameter": {
+        "name": "Diameter Growth",
+        "shifted": false,
+        "new_top_code": "mel",
+        "new_top_name": "Melanoma",
+        "new_top_conf": 0.5513,
+        "pert_orig_conf": 0.5513,
+        "conf_delta": -0.1012,
+        "mel_delta": -0.1012,
+        "summary": "The primary classification remained Melanoma, with confidence decreased from 65.3% to 55.1% (-10.1%). Melanoma risk declined from 65.3% to 55.1% (-10.1%)."
+      }
+    }
+  },
+  {
+    "image_id": "ISIC_0028913",
+    "subfolder": "image4_bkl_ISIC_0028913",
+    "target_desc": "Benign Keratosis",
+    "orig_code": "bkl",
+    "orig_name": "Benign Keratosis",
+    "orig_conf": 0.7968,
+    "perturbations": {
+      "border_irregularity": {
+        "name": "Border Irregularity",
+        "shifted": false,
+        "new_top_code": "bkl",
+        "new_top_name": "Benign Keratosis",
+        "new_top_conf": 0.5206,
+        "pert_orig_conf": 0.5206,
+        "conf_delta": -0.2762,
+        "mel_delta": 0.0049,
+        "summary": "The primary classification remained Benign Keratosis, with confidence decreased from 79.7% to 52.1% (-27.6%). Melanoma probability remains low at 0.7% (from 0.2%)."
+      },
+      "asymmetry": {
+        "name": "Lesion Asymmetry",
+        "shifted": false,
+        "new_top_code": "bkl",
+        "new_top_name": "Benign Keratosis",
+        "new_top_conf": 0.8125,
+        "pert_orig_conf": 0.8125,
+        "conf_delta": 0.0157,
+        "mel_delta": 0.0002,
+        "summary": "The primary classification remained Benign Keratosis with stable confidence (81.2% vs 79.7% originally). Melanoma probability remains low at 0.2% (from 0.2%)."
+      },
+      "diameter": {
+        "name": "Diameter Growth",
+        "shifted": false,
+        "new_top_code": "bkl",
+        "new_top_name": "Benign Keratosis",
+        "new_top_conf": 0.7484,
+        "pert_orig_conf": 0.7484,
+        "conf_delta": -0.0484,
+        "mel_delta": 0.0019,
+        "summary": "The primary classification remained Benign Keratosis with stable confidence (74.8% vs 79.7% originally). Melanoma probability remains low at 0.4% (from 0.2%)."
+      }
+    }
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "mean_age": 51.9152,
+  "age_min": 0.0,
+  "age_max": 85.0,
+  "sex_categories": [
+    "male",
+    "female"
+  ],
+  "localization_categories": [
+    "back",
+    "lower extremity",
+    "trunk",
+    "upper extremity",
+    "abdomen",
+    "face",
+    "chest",
+    "unknown"
+  ],
+  "metadata_dim": 11
+}

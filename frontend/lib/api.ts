@@ -25,6 +25,35 @@ export interface HealthStatus {
   model_name?: string;
 }
 
+export interface CounterfactualDetail {
+  name: string;
+  clinical_code: string;
+  description: string;
+  original_class: string;
+  original_name: string;
+  original_confidence: number;
+  original_mel_prob: number;
+  perturbed_confidence: number;
+  perturbed_mel_prob: number;
+  mel_prob_delta: number;
+  confidence_delta: number;
+  new_top_class: string;
+  new_top_name: string;
+  new_top_confidence: number;
+  classification_shifted: boolean;
+  area_change_pct: number;
+  plain_language_summary: string;
+  perturbed_image: string;
+  diff_image?: string;
+}
+
+export interface CounterfactualsMap {
+  border_irregularity?: CounterfactualDetail;
+  asymmetry?: CounterfactualDetail;
+  diameter?: CounterfactualDetail;
+  [key: string]: CounterfactualDetail | undefined;
+}
+
 export interface PredictResult {
   ok?: boolean;
   available?: boolean;  // optional — backend may omit this; derived below if absent
@@ -67,6 +96,10 @@ export interface PredictResult {
     num_lesion_components?: number;
   } | null;
   seg_error?: string | null;
+  // Counterfactual ABCD Explanations
+  counterfactuals_available?: boolean;
+  counterfactuals?: CounterfactualsMap | null;
+  cf_error?: string | null;
   image_quality_warning?: string | null;
   // Clinical Alert System fields
   alert_level?: "high_risk" | "low_confidence" | "normal";
@@ -136,15 +169,22 @@ export async function checkHealth(): Promise<HealthStatus | null> {
  * Returns { available: false } only on network failure.
  * Never returns a fake/demo result.
  */
-export async function predictImage(file: File): Promise<PredictResult | null> {
+export async function predictImage(
+  file: File,
+  includeCounterfactuals: boolean = false
+): Promise<PredictResult | null> {
   try {
     const form = new FormData();
     form.append("file", file);
 
-    const res = await fetch(`${API_BASE}/predict`, {
+    const url = includeCounterfactuals
+      ? `${API_BASE}/predict?include_counterfactuals=true`
+      : `${API_BASE}/predict`;
+
+    const res = await fetch(url, {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!res.ok) {

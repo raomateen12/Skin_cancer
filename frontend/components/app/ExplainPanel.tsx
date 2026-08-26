@@ -1,13 +1,33 @@
 "use client";
 
-import { Eye, Info, CheckSquare, ShieldCheck, Image as ImageIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  Eye,
+  Info,
+  CheckSquare,
+  ShieldCheck,
+  Image as ImageIcon,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  Layers,
+  ArrowRight,
+} from "lucide-react";
 import { type PredictResult } from "@/components/app/ResultPanel";
+import { predictImage, type CounterfactualDetail } from "@/lib/api";
 import StatusBadge from "@/components/shared/StatusBadge";
+import clsx from "clsx";
 
 interface ExplainPanelProps {
   result?: PredictResult | null;
   uploadedImageUrl?: string | null;
+  uploadedFile?: File | null;
   gradcamImages?: string[];
+  onResultUpdated?: (result: PredictResult) => void;
 }
 
 const CLASS_LABELS: Record<string, string> = {
@@ -31,7 +51,9 @@ const CHECKLIST = [
 export default function ExplainPanel({
   result,
   uploadedImageUrl,
+  uploadedFile,
   gradcamImages = [],
+  onResultUpdated,
 }: ExplainPanelProps) {
   const isRejected = result?.rejected === true;
   const hasResult = !isRejected && result && (result.available || result.ok);
@@ -44,15 +66,49 @@ export default function ExplainPanel({
   const confidence = result?.confidence;
   const concernLevel = result?.concern_level;
 
+  // Counterfactuals state
+  const [cfExpanded, setCfExpanded] = useState(false);
+  const [loadingCf, setLoadingCf] = useState(false);
+  const [cfError, setCfError] = useState<string | null>(null);
+  const [showDiffMap, setShowDiffMap] = useState<Record<string, boolean>>({});
+
+  const counterfactuals = result?.counterfactuals;
+  const cfAvailable = Boolean(result?.counterfactuals_available && counterfactuals);
+
+  const handleToggleCounterfactuals = async () => {
+    const nextState = !cfExpanded;
+    setCfExpanded(nextState);
+
+    // If expanding and counterfactuals not yet loaded but file is available, fetch them
+    if (nextState && !cfAvailable && uploadedFile && !loadingCf) {
+      setLoadingCf(true);
+      setCfError(null);
+      try {
+        const updated = await predictImage(uploadedFile, true);
+        if (updated && onResultUpdated) {
+          onResultUpdated(updated);
+        }
+      } catch (err) {
+        setCfError("Failed to generate counterfactuals. Please try again.");
+      } finally {
+        setLoadingCf(false);
+      }
+    }
+  };
+
+  const toggleDiff = (key: string) => {
+    setShowDiffMap((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
       <div>
         <h2 className="font-display text-2xl font-semibold text-[#0F172A]">
-          Visual Explanation
+          Visual Explanation & Counterfactuals
         </h2>
         <p className="text-[14px] text-[#64748B] mt-1.5">
-          Understand what the model reviewed before showing an AI-assisted insight.
+          Understand what regions the model focused on and simulate how morphological ABCD changes alter diagnosis.
         </p>
       </div>
 
@@ -121,7 +177,7 @@ export default function ExplainPanel({
       {/* Visual Explanation Grid */}
       <div>
         <h3 className="font-display text-[16px] font-medium text-[#0F172A] mb-4">
-          Visual attention maps
+          Visual attention maps & Segmentation
         </h3>
         {isRejected ? (
           <div className="flex items-center gap-4 p-6 bg-[#FFFBEB] border border-[#FEF08A] rounded-2xl">
@@ -287,9 +343,196 @@ export default function ExplainPanel({
         )}
       </div>
 
+      {/* ── NEW: Expandable ABCD Counterfactual Explanation Section ────────── */}
+      {hasResult && (
+        <div className="bg-white border border-[#E2E8F0] rounded-[1.25rem] overflow-hidden shadow-soft transition-all duration-300">
+          <button
+            type="button"
+            onClick={handleToggleCounterfactuals}
+            className="w-full p-6 text-left flex items-center justify-between hover:bg-[#F8FAFC] transition-colors focus:outline-none"
+          >
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center flex-shrink-0 text-[#0B7FEA]">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h3 className="font-display text-[16px] font-semibold text-[#0F172A]">
+                    What if this lesion looked different?
+                  </h3>
+                  <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                    ABCD Counterfactual Analysis
+                  </span>
+                </div>
+                <p className="text-[13px] text-[#64748B] mt-0.5">
+                  Simulate morphological changes (Border, Asymmetry, Diameter) to see how AI risk confidence shifts.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-[#64748B] text-[13px] font-medium pl-2">
+              <span className="hidden sm:inline">{cfExpanded ? "Hide simulation" : "Explore simulation"}</span>
+              {cfExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </div>
+          </button>
+
+          {cfExpanded && (
+            <div className="px-6 pb-6 pt-2 border-t border-[#F1F5F9] space-y-6 animate-fade-in">
+              {/* Introduction Banner */}
+              <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-start gap-3 text-[13px] text-[#475569] leading-relaxed">
+                <SlidersHorizontal size={17} className="text-[#0B7FEA] flex-shrink-0 mt-0.5" />
+                <p>
+                  These simulated counterfactual images perturb specific clinical features according to the dermatological{" "}
+                  <strong className="text-[#0F172A]">ABCD rules</strong> (Border Irregularity, Asymmetry, and Diameter Growth) using the U-Net mask and re-runs the classifier to reveal diagnostic sensitivity.
+                </p>
+              </div>
+
+              {/* Loading State */}
+              {loadingCf && (
+                <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
+                  <div className="w-8 h-8 rounded-full border-2 border-[#0B7FEA] border-t-transparent animate-spin" />
+                  <p className="text-[14px] font-medium text-[#0F172A]">
+                    Synthesizing counterfactual variations & re-running classifier...
+                  </p>
+                  <p className="text-[12px] text-[#64748B]">
+                    Modulating boundary contour harmonics and computing probability shifts.
+                  </p>
+                </div>
+              )}
+
+              {/* Error or No Lesion State */}
+              {!loadingCf && (cfError || result?.cf_error || (!cfAvailable && !counterfactuals)) && (
+                <div className="p-5 bg-[#FFFBEB] border border-[#FEF08A] rounded-xl flex items-start gap-3">
+                  <AlertCircle size={18} className="text-[#D97706] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[13px] font-medium text-[#92400E]">
+                      {cfError ?? result?.cf_error ?? "Counterfactual analysis unavailable for this lesion."}
+                    </p>
+                    <p className="text-[12px] text-[#78350F] mt-1">
+                      Counterfactual perturbation requires a well-defined lesion boundary mask from U-Net.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Counterfactual Cards Grid */}
+              {!loadingCf && cfAvailable && counterfactuals && (
+                <div className="grid md:grid-cols-3 gap-5">
+                  {(["border_irregularity", "asymmetry", "diameter"] as const).map((key) => {
+                    const item = counterfactuals[key] as CounterfactualDetail | undefined;
+                    if (!item) return null;
+
+                    const isDiffActive = showDiffMap[key] ?? false;
+                    const imgSrc = isDiffActive && item.diff_image ? item.diff_image : item.perturbed_image;
+                    const origConfPct = (item.original_confidence * 100).toFixed(1);
+                    const pertConfPct = (item.perturbed_confidence * 100).toFixed(1);
+                    const origMelPct = (item.original_mel_prob * 100).toFixed(1);
+                    const pertMelPct = (item.perturbed_mel_prob * 100).toFixed(1);
+                    const melDeltaPct = (item.mel_prob_delta * 100).toFixed(1);
+                    const isMelRise = item.mel_prob_delta > 0.005;
+
+                    return (
+                      <div
+                        key={key}
+                        className="bg-[#FAFAFA] border border-[#E2E8F0] rounded-2xl p-4 flex flex-col justify-between shadow-sm card-hover"
+                      >
+                        <div>
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-6 h-6 rounded-md bg-[#0F172A] text-white flex items-center justify-center text-[11px] font-bold">
+                                {item.clinical_code}
+                              </span>
+                              <h4 className="font-display text-[14px] font-semibold text-[#0F172A]">
+                                {item.name}
+                              </h4>
+                            </div>
+                            {item.area_change_pct !== undefined && (
+                              <span className="text-[10px] font-medium text-[#64748B] bg-white px-2 py-0.5 rounded-full border border-[#E2E8F0]">
+                                Area: {item.area_change_pct > 0 ? `+${item.area_change_pct}%` : `${item.area_change_pct}%`}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Image Container with view toggle */}
+                          <div className="relative aspect-square rounded-xl overflow-hidden bg-white border border-[#E2E8F0] mb-3 group">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={imgSrc}
+                              alt={`Counterfactual perturbation: ${item.name}`}
+                              className="w-full h-full object-cover"
+                            />
+                            {item.diff_image && (
+                              <button
+                                type="button"
+                                onClick={() => toggleDiff(key)}
+                                className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/70 hover:bg-black/90 text-white text-[10px] font-medium flex items-center gap-1 backdrop-blur-sm transition-colors shadow-sm"
+                                title="Toggle perturbation difference heatmap"
+                              >
+                                <Layers size={12} />
+                                <span>{isDiffActive ? "Show Photo" : "Diff Heatmap"}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Confidence Shifts Table */}
+                          <div className="space-y-2 bg-white p-3 rounded-xl border border-[#E2E8F0] mb-3 text-[12px]">
+                            <div className="flex items-center justify-between text-[#475569]">
+                              <span>Predicted ({item.original_name}):</span>
+                              <div className="flex items-center gap-1 font-semibold">
+                                <span className="text-[#64748B]">{origConfPct}%</span>
+                                <ArrowRight size={12} className="text-[#94A3B8]" />
+                                <span className={item.confidence_delta < 0 ? "text-[#D97706]" : "text-[#10B981]"}>
+                                  {pertConfPct}%
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[#475569] pt-1 border-t border-[#F1F5F9]">
+                              <span>Melanoma Risk:</span>
+                              <div className="flex items-center gap-1 font-semibold">
+                                <span className="text-[#64748B]">{origMelPct}%</span>
+                                <ArrowRight size={12} className="text-[#94A3B8]" />
+                                <span className={isMelRise ? "text-[#DC2626]" : "text-[#15803D]"}>
+                                  {pertMelPct}% ({isMelRise ? `+${melDeltaPct}%` : `${melDeltaPct}%`})
+                                </span>
+                              </div>
+                            </div>
+
+                            {item.classification_shifted && (
+                              <div className="mt-2 pt-2 border-t border-[#FEE2E2] flex items-center gap-1.5 text-[11px] font-medium text-[#991B1B]">
+                                <AlertCircle size={13} className="text-[#DC2626] flex-shrink-0" />
+                                <span>Top class shifts to: <strong>{item.new_top_name}</strong> ({(item.new_top_confidence * 100).toFixed(1)}%)</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Plain-Language Clinical Summary Quote */}
+                        <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl text-[11.5px] text-[#1E40AF] leading-relaxed">
+                          <strong>Clinical Insight:</strong> {item.plain_language_summary}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Educational Simulation Footnote / Disclaimer */}
+              {!loadingCf && cfAvailable && counterfactuals && (
+                <div className="pt-2 border-t border-[#F1F5F9] flex items-start gap-2 text-[12px] text-[#64748B] leading-relaxed">
+                  <Info size={14} className="text-[#94A3B8] flex-shrink-0 mt-0.5" />
+                  <p>
+                    These simulations reflect patterns the AI model has learned, which may not always match standard clinical dermatology criteria (e.g. the ABCD rule). They are for educational illustration only, not a diagnostic or clinical judgment.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bottom section: 2 columns */}
       <div className="grid md:grid-cols-2 gap-6">
-
         {/* How to read this */}
         <div className="bg-white border border-[#E2E8F0] rounded-[1.25rem] p-6 shadow-soft">
           <div className="flex items-center gap-2.5 mb-4">
@@ -302,7 +545,7 @@ export default function ExplainPanel({
             {[
               "Highlighted areas show regions that influenced the model's prediction.",
               "The highlighted region should ideally overlap the lesion area.",
-              "Heatmaps are transparency aids, not clinical proof.",
+              "Counterfactual simulations show how specific ABCD changes impact classification.",
               "A dermatologist should always make the final clinical decision.",
             ].map((item, i) => (
               <li key={i} className="flex items-start gap-3">
@@ -337,10 +580,11 @@ export default function ExplainPanel({
         <ShieldCheck size={18} className="text-[#64748B] flex-shrink-0 mt-0.5" />
         <p className="text-[13px] text-[#475569] leading-relaxed">
           <span className="font-medium text-[#0F172A]">Safety note.</span>{" "}
-          Visual explanations are designed to support transparency. They do not prove a diagnosis and
+          Visual explanations and counterfactual simulations are designed for transparency and education. They do not prove a diagnosis and
           should not replace professional medical evaluation by a qualified dermatologist.
         </p>
       </div>
     </div>
   );
 }
+

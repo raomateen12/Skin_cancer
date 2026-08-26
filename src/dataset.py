@@ -33,10 +33,11 @@ class HAM10000Dataset(Dataset):
     and optionally: age, sex, localization
     """
 
-    def __init__(self, csv_file, image_size=224, transform=None):
+    def __init__(self, csv_file, image_size=224, transform=None, use_metadata=False):
         self.df = pd.read_csv(csv_file)
         self.image_size = image_size
         self.transform = transform
+        self.use_metadata = use_metadata
 
         # Make sure required columns exist
         required = ["image_id", "dx", "image_path"]
@@ -64,13 +65,43 @@ class HAM10000Dataset(Dataset):
         metadata = {
             "image_id":     row["image_id"],
             "dx":           row["dx"],
-            "age":          row.get("age", None),
-            "sex":          row.get("sex", None),
-            "localization": row.get("localization", None),
+            "age":          float(row["age"]) if pd.notna(row.get("age")) else None,
+            "sex":          str(row["sex"]) if pd.notna(row.get("sex")) else "unknown",
+            "localization": str(row["localization"]) if pd.notna(row.get("localization")) else "unknown",
             "image_path":   row["image_path"],
         }
 
+        if self.use_metadata:
+            return image, label, metadata
         return image, label, metadata
+
+
+def collate_image_only(batch):
+    """Collate function for standard image-only training (images, labels)."""
+    images = torch.stack([item[0] for item in batch])
+    labels = torch.tensor([item[1] for item in batch], dtype=torch.long)
+    return images, labels
+
+
+def collate_with_metadata(batch):
+    """
+    Collate function for multimodal fusion training.
+    Returns:
+      images: (B, 3, H, W) FloatTensor
+      labels: (B,) LongTensor
+      metadata: dict with lists of 'age', 'sex', 'localization', 'image_id'
+    """
+    images = torch.stack([item[0] for item in batch])
+    labels = torch.tensor([item[1] for item in batch], dtype=torch.long)
+    
+    metadata_list = [item[2] for item in batch]
+    metadata_batch = {
+        "age": [m["age"] for m in metadata_list],
+        "sex": [m["sex"] for m in metadata_list],
+        "localization": [m["localization"] for m in metadata_list],
+        "image_id": [m["image_id"] for m in metadata_list],
+    }
+    return images, labels, metadata_batch
 
 
 def get_train_transforms(image_size=224):
@@ -103,3 +134,4 @@ def get_eval_transforms(image_size=224):
         ),
         ToTensorV2(),
     ])
+

@@ -46,6 +46,10 @@ export interface PredictResult {
     num_lesion_components?: number;
   } | null;
   seg_error?: string | null;
+  // Counterfactual ABCD Explanations
+  counterfactuals_available?: boolean;
+  counterfactuals?: import("@/lib/api").CounterfactualsMap | null;
+  cf_error?: string | null;
   image_quality_warning?: string | null;
   // Clinical Alert System
   alert_level?: "high_risk" | "low_confidence" | "normal";

@@ -17,15 +17,16 @@ export default function AppPage() {
   const [result, setResult] = useState<PredictResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  const handleResult = (r: unknown) => {
+  const handleResult = useCallback((r: unknown) => {
     const result = r as PredictResult;
     setResult(result);
     // Don't navigate to result panel for rejected images — keep user on analyze to re-upload
     if (!result?.rejected) {
       setActivePanel("result");
     }
-  };
+  }, []);
 
   // Clear stale result whenever a new image is chosen
   const handleImageSelected = useCallback((url: string | null) => {
@@ -90,7 +91,12 @@ export default function AppPage() {
                       Select Image
                     </h3>
                   </div>
-                  <UploadCard onResult={handleResult} onAnalyzing={setAnalyzing} onImageSelected={handleImageSelected} />
+                  <UploadCard 
+                    onResult={handleResult} 
+                    onAnalyzing={setAnalyzing} 
+                    onImageSelected={handleImageSelected}
+                    onFileSelected={setUploadedFile}
+                  />
                 </div>
 
                 {/* Right — result preview */}
@@ -170,6 +176,8 @@ export default function AppPage() {
               <ExplainPanel
                 result={result}
                 uploadedImageUrl={uploadedImageUrl}
+                uploadedFile={uploadedFile}
+                onResultUpdated={setResult}
                 gradcamImages={(() => {
                   if (!result?.gradcam_available) return [];
                   // New named dict shape from backend
