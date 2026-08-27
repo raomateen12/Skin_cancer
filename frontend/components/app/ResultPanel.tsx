@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, WifiOff, Clock, ChevronRight, AlertTriangle, Info, CheckCircle2, AlertOctagon } from "lucide-react";
+import { Activity, WifiOff, Clock, ChevronRight, AlertTriangle, Info, CheckCircle2, AlertOctagon, Layers } from "lucide-react";
 import StatusBadge from "@/components/shared/StatusBadge";
 import clsx from "clsx";
 
@@ -50,6 +50,14 @@ export interface PredictResult {
   counterfactuals_available?: boolean;
   counterfactuals?: import("@/lib/api").CounterfactualsMap | null;
   cf_error?: string | null;
+  // Multimodal Patient Metadata Fusion
+  metadata_fusion_available?: boolean;
+  fusion_predicted_code?: string | null;
+  fusion_predicted_name?: string | null;
+  fusion_confidence?: number | null;
+  fusion_agrees_with_image_only?: boolean | null;
+  fusion_disagreement_note?: string | null;
+  fusion_error?: string | null;
   image_quality_warning?: string | null;
   // Clinical Alert System
   alert_level?: "high_risk" | "low_confidence" | "normal";
@@ -269,6 +277,70 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Multimodal Patient Metadata Fusion Card ── */}
+      {result.metadata_fusion_available && result.fusion_predicted_name && (
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-[0.15em] flex items-center gap-1.5">
+              <Layers size={13} className="text-[#0B7FEA]" />
+              Multimodal Analysis (Image + Metadata)
+            </h3>
+            {result.fusion_agrees_with_image_only ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                <CheckCircle2 size={11} className="text-[#16A34A]" />
+                Agrees with Image Model
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]">
+                <AlertTriangle size={11} className="text-[#D97706]" />
+                Multimodal Disagreement
+              </span>
+            )}
+          </div>
+
+          <div className="p-4 sm:p-5 bg-white border border-[#E2E8F0] rounded-2xl shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[11px] text-[#64748B] uppercase tracking-wider font-medium">
+                  Multimodal Prediction
+                </p>
+                <p className="font-display text-[17px] font-semibold text-[#0F172A] mt-0.5">
+                  {result.fusion_predicted_name}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-[#64748B] uppercase tracking-wider font-medium">
+                  Multimodal Conf.
+                </p>
+                <p className="font-display text-[17px] font-semibold text-[#0B7FEA] mt-0.5">
+                  {result.fusion_confidence !== undefined && result.fusion_confidence !== null
+                    ? `${(result.fusion_confidence * 100).toFixed(1)}%`
+                    : "N/A"}
+                </p>
+              </div>
+            </div>
+
+            {/* Disagreement Callout */}
+            {!result.fusion_agrees_with_image_only && result.fusion_disagreement_note && (
+              <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl flex items-start gap-2.5 text-[12px] text-[#92400E] leading-relaxed">
+                <AlertTriangle size={15} className="text-[#D97706] flex-shrink-0 mt-0.5" />
+                <p>{result.fusion_disagreement_note}</p>
+              </div>
+            )}
+
+            {/* Agreement Note */}
+            {result.fusion_agrees_with_image_only && (
+              <div className="p-3 bg-[#F0FDF4] border border-[#DCFCE7] rounded-xl flex items-start gap-2 text-[12px] text-[#166534] leading-relaxed">
+                <CheckCircle2 size={14} className="text-[#16A34A] flex-shrink-0 mt-0.5" />
+                <p>
+                  Both the visual EfficientNet-B0 backbone and patient demographic metadata independently support <strong>{result.fusion_predicted_name}</strong>.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Top 3 Patterns (Progress Bars) — handles both backend shapes */}
       {(() => {

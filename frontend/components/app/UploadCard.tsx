@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Upload, Image as ImageIcon, X, AlertCircle } from "lucide-react";
+import { Upload, Image as ImageIcon, X, AlertCircle, User, Activity, ChevronDown, ChevronUp } from "lucide-react";
 import clsx from "clsx";
 import { predictImage } from "@/lib/api";
 
@@ -12,6 +12,17 @@ interface UploadCardProps {
   onFileSelected?: (file: File | null) => void;
 }
 
+const LOCALIZATIONS = [
+  { value: "back", label: "Back" },
+  { value: "lower extremity", label: "Lower Extremity (Legs, Hips)" },
+  { value: "trunk", label: "Trunk" },
+  { value: "upper extremity", label: "Upper Extremity (Arms, Shoulders)" },
+  { value: "abdomen", label: "Abdomen" },
+  { value: "face", label: "Face" },
+  { value: "chest", label: "Chest" },
+  { value: "unknown", label: "Unknown / Other" },
+];
+
 export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onFileSelected }: UploadCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -19,6 +30,12 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onF
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Patient metadata state (Optional)
+  const [age, setAge] = useState<string>("");
+  const [sex, setSex] = useState<string>("");
+  const [localization, setLocalization] = useState<string>("");
+  const [metaOpen, setMetaOpen] = useState<boolean>(true);
 
   const handleFile = (f: File) => {
     setError(null);
@@ -58,7 +75,13 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onF
     onAnalyzing(true);
     onResult(null); // clear stale previous result immediately
     try {
-      const result = await predictImage(file);
+      const parsedAge = age.trim() !== "" ? parseFloat(age) : null;
+      const metadata = {
+        patientAge: parsedAge !== null && !isNaN(parsedAge) ? parsedAge : null,
+        patientSex: sex.trim() !== "" ? sex : null,
+        patientLocalization: localization.trim() !== "" ? localization : null,
+      };
+      const result = await predictImage(file, false, metadata);
       onResult(result);
     } catch {
       setError("An unexpected error occurred. Please try again.");
@@ -148,6 +171,91 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onF
         )}
       </div>
 
+      {/* Optional Patient Clinical Metadata Context */}
+      <div className="bg-white border border-[#E2E8F0] rounded-[1.25rem] p-4 shadow-soft">
+        <button
+          type="button"
+          onClick={() => setMetaOpen(!metaOpen)}
+          className="w-full flex items-center justify-between text-left focus:outline-none"
+        >
+          <div className="flex items-center gap-2">
+            <User size={15} className="text-[#0B7FEA]" />
+            <span className="text-[13px] font-semibold text-[#0F172A]">
+              Patient Context & Metadata
+            </span>
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0]">
+              Optional
+            </span>
+          </div>
+          <div className="text-[#94A3B8]">
+            {metaOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </div>
+        </button>
+
+        {metaOpen && (
+          <div className="mt-3.5 pt-3 border-t border-[#F1F5F9] space-y-3 animate-fade-in text-[13px]">
+            <p className="text-[12px] text-[#64748B] leading-relaxed">
+              Optionally provide patient demographics to enable multimodal fusion prediction.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Age input */}
+              <div>
+                <label htmlFor="patient-age" className="block text-[11px] font-semibold text-[#475569] uppercase tracking-wider mb-1">
+                  Age (Years)
+                </label>
+                <input
+                  id="patient-age"
+                  type="number"
+                  min="0"
+                  max="85"
+                  value={age}
+                  onChange={(e) => setAge(e.target.value)}
+                  placeholder="e.g. 45"
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] focus:outline-none focus:border-[#0B7FEA] focus:bg-white transition-colors"
+                />
+              </div>
+
+              {/* Sex select */}
+              <div>
+                <label htmlFor="patient-sex" className="block text-[11px] font-semibold text-[#475569] uppercase tracking-wider mb-1">
+                  Biological Sex
+                </label>
+                <select
+                  id="patient-sex"
+                  value={sex}
+                  onChange={(e) => setSex(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] focus:outline-none focus:border-[#0B7FEA] focus:bg-white transition-colors"
+                >
+                  <option value="">Prefer not to say</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+
+              {/* Localization select */}
+              <div>
+                <label htmlFor="patient-loc" className="block text-[11px] font-semibold text-[#475569] uppercase tracking-wider mb-1">
+                  Lesion Location
+                </label>
+                <select
+                  id="patient-loc"
+                  value={localization}
+                  onChange={(e) => setLocalization(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-[13px] text-[#0F172A] focus:outline-none focus:border-[#0B7FEA] focus:bg-white transition-colors"
+                >
+                  <option value="">Select location</option>
+                  {LOCALIZATIONS.map((loc) => (
+                    <option key={loc.value} value={loc.value}>
+                      {loc.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-[#FEF2F2] border border-[#FECACA] rounded-xl animate-fade-in shadow-sm">
@@ -171,7 +279,7 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onF
         {analyzing ? (
           <>
             <div className="w-4 h-4 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
-            Analyzing image...
+            Analyzing image & metadata...
           </>
         ) : (
           "Analyze Image"
@@ -180,3 +288,4 @@ export default function UploadCard({ onResult, onAnalyzing, onImageSelected, onF
     </div>
   );
 }
+

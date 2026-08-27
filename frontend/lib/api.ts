@@ -100,6 +100,14 @@ export interface PredictResult {
   counterfactuals_available?: boolean;
   counterfactuals?: CounterfactualsMap | null;
   cf_error?: string | null;
+  // Multimodal Patient Metadata Fusion fields
+  metadata_fusion_available?: boolean;
+  fusion_predicted_code?: string | null;
+  fusion_predicted_name?: string | null;
+  fusion_confidence?: number | null;
+  fusion_agrees_with_image_only?: boolean | null;
+  fusion_disagreement_note?: string | null;
+  fusion_error?: string | null;
   image_quality_warning?: string | null;
   // Clinical Alert System fields
   alert_level?: "high_risk" | "low_confidence" | "normal";
@@ -142,6 +150,12 @@ export interface AssistantResult {
   };
 }
 
+export interface PatientMetadataInput {
+  patientAge?: number | null;
+  patientSex?: string | null;
+  patientLocalization?: string | null;
+}
+
 // ─── API calls ────────────────────────────────────────────────────────────────
 
 /**
@@ -162,7 +176,7 @@ export async function checkHealth(): Promise<HealthStatus | null> {
 }
 
 /**
- * Send an image file to the /predict endpoint.
+ * Send an image file and optional patient metadata to the /predict endpoint.
  *
  * Returns a PredictResult dict always. The `available` boolean
  * indicates whether the model was loaded and the inference ran.
@@ -171,11 +185,22 @@ export async function checkHealth(): Promise<HealthStatus | null> {
  */
 export async function predictImage(
   file: File,
-  includeCounterfactuals: boolean = false
+  includeCounterfactuals: boolean = false,
+  metadata?: PatientMetadataInput
 ): Promise<PredictResult | null> {
   try {
     const form = new FormData();
     form.append("file", file);
+
+    if (metadata?.patientAge !== undefined && metadata?.patientAge !== null && !isNaN(metadata.patientAge)) {
+      form.append("patient_age", metadata.patientAge.toString());
+    }
+    if (metadata?.patientSex && metadata.patientSex !== "unknown") {
+      form.append("patient_sex", metadata.patientSex);
+    }
+    if (metadata?.patientLocalization && metadata.patientLocalization !== "unknown") {
+      form.append("patient_localization", metadata.patientLocalization);
+    }
 
     const url = includeCounterfactuals
       ? `${API_BASE}/predict?include_counterfactuals=true`

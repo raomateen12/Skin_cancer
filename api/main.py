@@ -37,7 +37,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 try:
-    from fastapi import FastAPI, File, UploadFile, HTTPException, status
+    from fastapi import FastAPI, File, UploadFile, Form, HTTPException, status
     from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel
 except ImportError as e:
@@ -67,12 +67,14 @@ CHECKPOINT_CANDIDATES = [
     ROOT / "checkpoints" / "best_efficientnet_b0.pth",
     ROOT / "checkpoints" / "efficientnet_b0_best.pth",
 ]
+FUSION_CHECKPOINT_PATH = ROOT / "checkpoints" / "best_metadata_fusion.pth"
 CLASS_MAPPING_PATH = ROOT / "data" / "processed" / "class_mapping.json"
 RAG_INDEX_PATH = ROOT / "vectorstore" / "faiss_index"
 
 # ── Lazy-loaded model state ──────────────────────────────────────────────────
 
 _model = None
+_fusion_model = None
 _transform = None
 
 # ── Fallback class labels (used when class_mapping.json is absent) ───────────
@@ -220,7 +222,51 @@ def _load_model() -> bool:
             ),
         ])
         return True
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to load EfficientNet-B0 model: %s", exc)
+        return False
+
+
+def _load_fusion_model() -> bool:
+    """Attempt to load MetadataFusionModel checkpoint lazily. Returns True if successful."""
+    global _fusion_model, _transform
+    if _fusion_model is not None:
+        return True
+
+    if not FUSION_CHECKPOINT_PATH.exists():
+        return False
+
+    try:
+        import torch
+        from torchvision import transforms
+        from src.metadata_fusion_model import get_metadata_fusion_model
+
+        device = torch.device("cpu")
+        stats_path = ROOT / "data" / "processed" / "metadata_stats.json"
+        model = get_metadata_fusion_model(
+            num_classes=7,
+            freeze_backbone=False,
+            pretrained_weights=False,
+            stats_path=stats_path if stats_path.exists() else None,
+        )
+        state = torch.load(str(FUSION_CHECKPOINT_PATH), map_location=device, weights_only=False)
+        state_dict = state.get("model_state_dict", state)
+        model.load_state_dict(state_dict)
+        model.eval()
+
+        _fusion_model = model
+        if _transform is None:
+            _transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225],
+                ),
+            ])
+        return True
+    except Exception as exc:
+        logger.warning("Failed to load MetadataFusionModel: %s", exc)
         return False
 
 
@@ -437,12 +483,15 @@ async def health():
 
     unet_checkpoint = ROOT / "checkpoints" / "best_unet.pth"
     unet_available = unet_checkpoint.exists()
+    fusion_available = FUSION_CHECKPOINT_PATH.exists()
 
     missing = []
     if not model_available:
         missing.append(str(CHECKPOINT_CANDIDATES[0].relative_to(ROOT)))
     if not unet_available:
         missing.append(str(unet_checkpoint.relative_to(ROOT)))
+    if not fusion_available:
+        missing.append(str(FUSION_CHECKPOINT_PATH.relative_to(ROOT)))
     if not class_mapping_available:
         missing.append(str(CLASS_MAPPING_PATH.relative_to(ROOT)))
     if not rag_index_available:
@@ -461,6 +510,8 @@ async def health():
         "checkpoint_path": str(CHECKPOINT_CANDIDATES[0].relative_to(ROOT)),
         "unet_available": unet_available,
         "unet_checkpoint_path": str(unet_checkpoint.relative_to(ROOT)) if unet_available else None,
+        "metadata_fusion_available": fusion_available,
+        "metadata_fusion_checkpoint_path": str(FUSION_CHECKPOINT_PATH.relative_to(ROOT)) if fusion_available else None,
         "class_mapping_available": class_mapping_available,
         "rag_available": rag_available,
         "rag_index_available": rag_index_available,
@@ -474,6 +525,9 @@ async def health():
 async def predict(
     file: UploadFile = File(...),
     include_counterfactuals: bool = False,
+    patient_age: Optional[float] = Form(None),
+    patient_sex: Optional[str] = Form(None),
+    patient_localization: Optional[str] = Form(None),
 ):
     """
     Accept a skin lesion image and return an AI-assisted educational classification.
@@ -639,6 +693,65 @@ async def predict(
                     logger.warning("Counterfactual generation failed (%s: %s)", type(cf_exc).__name__, cf_exc, exc_info=True)
                     cf_error = f"{type(cf_exc).__name__}: {cf_exc}"
 
+        # ── Step 4.6: Multimodal Patient Metadata Fusion (Optional) ───────────
+        metadata_fusion_available = False
+        fusion_predicted_code: str | None = None
+        fusion_predicted_name: str | None = None
+        fusion_confidence: float | None = None
+        fusion_agrees_with_image_only: bool | None = None
+        fusion_disagreement_note: str | None = None
+        fusion_error: str | None = None
+
+        has_patient_metadata = (
+            patient_age is not None
+            or (patient_sex is not None and str(patient_sex).strip().lower() not in ("", "none", "prefer_not_to_say", "prefer not to say", "null"))
+            or (patient_localization is not None and str(patient_localization).strip().lower() not in ("", "none", "unknown/other", "unknown / other", "null"))
+        )
+
+        if has_patient_metadata:
+            if not FUSION_CHECKPOINT_PATH.exists():
+                fusion_error = "Metadata fusion checkpoint (best_metadata_fusion.pth) is not available."
+            else:
+                fusion_loaded = _load_fusion_model()
+                if not fusion_loaded or _fusion_model is None:
+                    fusion_error = "Failed to load metadata fusion model checkpoint."
+                else:
+                    try:
+                        clean_sex = str(patient_sex).strip().lower() if patient_sex else "unknown"
+                        if clean_sex in ("prefer_not_to_say", "prefer not to say", "prefer_not_to_disclose"):
+                            clean_sex = "unknown"
+
+                        clean_loc = str(patient_localization).strip().lower() if patient_localization else "unknown"
+                        if clean_loc in ("unknown/other", "unknown / other", "other"):
+                            clean_loc = "unknown"
+
+                        meta_dict = {
+                            "age": float(patient_age) if patient_age is not None else None,
+                            "sex": clean_sex,
+                            "localization": clean_loc,
+                        }
+
+                        with torch.no_grad():
+                            fusion_logits = _fusion_model(tensor, meta_dict)
+                            fusion_probs = torch.softmax(fusion_logits, dim=1).squeeze()
+
+                        fusion_top_idx = int(fusion_probs.argmax())
+                        fusion_predicted_code = class_labels.get(fusion_top_idx, f"class_{fusion_top_idx}")
+                        fusion_predicted_name = label_names.get(fusion_predicted_code, fusion_predicted_code)
+                        fusion_confidence = round(float(fusion_probs[fusion_top_idx]), 4)
+                        metadata_fusion_available = True
+
+                        fusion_agrees_with_image_only = bool(fusion_predicted_code == predicted_code)
+                        if not fusion_agrees_with_image_only:
+                            fusion_disagreement_note = (
+                                f"The image-only model predicted {predicted_name} while the multimodal model "
+                                f"(which also considers patient age/sex/body location) predicted {fusion_predicted_name} "
+                                "— clinical judgment required."
+                            )
+                    except Exception as f_exc:
+                        logger.warning("Metadata fusion inference failed (%s: %s)", type(f_exc).__name__, f_exc, exc_info=True)
+                        fusion_error = f"{type(f_exc).__name__}: {f_exc}"
+
         # ── Step 5: Clinical Alert System ────────────────────────────────────
         if predicted_code in HIGH_RISK_CLASSES:
             alert_level = "high_risk"
@@ -712,6 +825,14 @@ async def predict(
             "counterfactuals_available": cf_available,
             "counterfactuals": cf_results,
             "cf_error": cf_error,
+            # Multimodal Patient Metadata Fusion fields
+            "metadata_fusion_available": metadata_fusion_available,
+            "fusion_predicted_code": fusion_predicted_code,
+            "fusion_predicted_name": fusion_predicted_name,
+            "fusion_confidence": fusion_confidence,
+            "fusion_agrees_with_image_only": fusion_agrees_with_image_only,
+            "fusion_disagreement_note": fusion_disagreement_note,
+            "fusion_error": fusion_error,
             "image_quality_warning": image_quality_warning,
             # Clinical Alert System fields
             "alert_level": alert_level,
