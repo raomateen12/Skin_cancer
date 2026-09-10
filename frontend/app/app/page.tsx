@@ -76,7 +76,7 @@ export default function AppPage() {
                   New Analysis
                 </h2>
                 <p className="text-[14px] text-[#64748B] leading-relaxed">
-                  Upload a dermoscopic image to generate an educational pattern-recognition insight.
+                  Upload your own dermoscopic image or select from 5 pre-loaded clinical dataset samples to test model diagnosis, Grad-CAM attention maps, and U-Net boundary segmentation.
                 </p>
               </div>
 
