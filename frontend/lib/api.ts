@@ -6,7 +6,27 @@
  * Override with NEXT_PUBLIC_API_URL environment variable.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const LIVE_HF_BACKEND = "https://rmas12-dermalens-api.hf.space";
+
+function resolveApiBase(): string {
+  // If explicitly configured in environment variable, use it
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  // In the browser, check if running on localhost or on production domain
+  if (typeof window !== "undefined") {
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    return isLocalhost ? "http://localhost:8000" : LIVE_HF_BACKEND;
+  }
+  // On server-side rendering
+  return process.env.NODE_ENV === "production"
+    ? LIVE_HF_BACKEND
+    : "http://localhost:8000";
+}
+
+export const API_BASE = resolveApiBase();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,7 +186,7 @@ export async function checkHealth(): Promise<HealthStatus | null> {
   try {
     const res = await fetch(`${API_BASE}/health`, {
       method: "GET",
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return null;
     return (await res.json()) as HealthStatus;
@@ -206,10 +226,11 @@ export async function predictImage(
       ? `${API_BASE}/predict?include_counterfactuals=true`
       : `${API_BASE}/predict`;
 
+    // 90s timeout to allow Hugging Face cold start if sleeping
     const res = await fetch(url, {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (!res.ok) {
@@ -240,12 +261,24 @@ export async function predictImage(
       ...data,
       available: data.available ?? (data.ok !== false && hasPrediction),
     };
-  } catch {
-    // Connection refused / backend not running
+  } catch (err: unknown) {
+    const isLocal =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    const isTimeout =
+      err instanceof Error &&
+      (err.name === "TimeoutError" || err.message.toLowerCase().includes("timeout"));
+
     return {
       available: false,
       ok: false,
-      error: "Backend is not running. Start the FastAPI server on port 8000.",
+      error: isLocal
+        ? "Backend is not running. Start the FastAPI server on port 8000."
+        : isTimeout
+        ? "Cloud backend took too long to wake up. Please click Analyze again."
+        : "Cloud backend is waking up or initializing. Please wait a few moments and try again.",
     };
   }
 }

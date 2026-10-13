@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Sidebar from "@/components/app/Sidebar";
 import UploadCard from "@/components/app/UploadCard";
 import ResultPanel, { type PredictResult } from "@/components/app/ResultPanel";
@@ -8,6 +8,7 @@ import ExplainPanel from "@/components/app/ExplainPanel";
 import AssistantChat from "@/components/app/AssistantChat";
 import GuidePanel from "@/components/app/GuidePanel";
 import SafetyNote from "@/components/shared/SafetyNote";
+import { checkHealth } from "@/lib/api";
 import { Info, HelpCircle } from "lucide-react";
 
 type Panel = "analyze" | "result" | "explain" | "ask-assistant" | "guide";
@@ -18,6 +19,11 @@ export default function AppPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    // Warm up the backend API immediately on page load so cold-start delay is eliminated
+    checkHealth().catch(() => {});
+  }, []);
 
   const handleResult = useCallback((r: unknown) => {
     const result = r as PredictResult;

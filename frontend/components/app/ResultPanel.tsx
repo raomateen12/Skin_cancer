@@ -164,8 +164,19 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
     (result.available === false && !hasPrediction);
 
   if (isFailure) {
-    const isBackendDown = result.error?.includes("Backend is not running") || result.error?.includes("not running");
-    const isCheckpointMissing = Boolean(result.missing_path) || result.error?.includes("weights") || result.error?.includes("checkpoint");
+    const isBackendDown =
+      result.error?.includes("Backend is not running") ||
+      result.error?.includes("not running") ||
+      result.error?.includes("waking up");
+    const isCheckpointMissing =
+      Boolean(result.missing_path) ||
+      result.error?.includes("weights") ||
+      result.error?.includes("checkpoint");
+
+    const isLocal =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
 
     return (
       <div className="space-y-4">
@@ -175,15 +186,21 @@ export default function ResultPanel({ result, analyzing }: ResultPanelProps) {
           </div>
           <div>
             <p className="font-display text-[15px] font-medium text-[#0F172A]">
-              {isBackendDown ? "Backend is not running" : isCheckpointMissing ? "Model checkpoint unavailable" : "Analysis unavailable"}
-            </p>
-            <p className="text-[13px] text-[#64748B] mt-2 leading-relaxed max-w-[300px] mx-auto">
               {isBackendDown
-                ? "Start the FastAPI backend on port 8000 to enable predictions."
+                ? (isLocal ? "Backend is not running" : "Connecting to Cloud Backend")
                 : isCheckpointMissing
-                ? "The model weights file is not present. Place the trained checkpoint in the checkpoints/ directory."
-                : "The analysis service is not available. Ensure the backend is running and the model is loaded."
-              }
+                ? "Model checkpoint unavailable"
+                : "Analysis unavailable"}
+            </p>
+            <p className="text-[13px] text-[#64748B] mt-2 leading-relaxed max-w-[340px] mx-auto">
+              {result.error ??
+                (isBackendDown
+                  ? (isLocal
+                      ? "Start the FastAPI backend on port 8000 to enable predictions."
+                      : "The cloud AI backend is waking up or initializing. Please click Analyze again in a moment.")
+                  : isCheckpointMissing
+                  ? "The model weights file is not present. Place the trained checkpoint in the checkpoints/ directory."
+                  : "The analysis service is not available. Ensure the backend is running and the model is loaded.")}
             </p>
             {result.missing_path && (
               <p className="text-[11px] text-[#94A3B8] mt-2 font-mono">

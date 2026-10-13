@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import time
 from pathlib import Path
 
@@ -93,6 +94,76 @@ ITA_CSV          = Path("data/processed/test_with_ita.csv")
 HAIR_ITA_CSV     = Path("data/processed/test_with_ita_hairremoved.csv")
 CHECKPOINT_PATH  = "checkpoints/best_efficientnet_b0.pth"
 NUM_CLASSES      = 7
+RAW_IMAGE_DIRS   = [
+    Path("data/raw/HAM10000_images_part_1"),
+    Path("data/raw/HAM10000_images_part_2"),
+]
+
+
+# ── Step 0: Image path validation & in-memory remapping ────────────────────────
+
+def validate_and_remap_image_paths(
+    df: pd.DataFrame,
+    raw_dirs: list[Path] = RAW_IMAGE_DIRS,
+) -> pd.DataFrame:
+    """
+    Verify image_path exists for each row using os.path.exists().
+    If not found, searches for the image in:
+      - data/raw/HAM10000_images_part_1/
+      - data/raw/HAM10000_images_part_2/
+    using image_id.
+
+    Updates paths in-memory (does NOT overwrite the CSV).
+    Prints how many paths were missing and how many were successfully remapped.
+    If any image cannot be found after remapping, skips it and prints a warning.
+    """
+    missing_count = 0
+    remapped_count = 0
+    valid_indices = []
+
+    df = df.copy()
+
+    for idx, row in df.iterrows():
+        orig_path = str(row["image_path"]) if pd.notna(row.get("image_path")) else ""
+        if orig_path and os.path.exists(orig_path):
+            valid_indices.append(idx)
+            continue
+
+        missing_count += 1
+        img_id = str(row.get("image_id", "")).strip()
+
+        found_path = None
+        candidates = []
+
+        if img_id:
+            filename = img_id if img_id.lower().endswith((".jpg", ".png", ".jpeg")) else f"{img_id}.jpg"
+            for rdir in raw_dirs:
+                candidates.append(rdir / filename)
+
+        if orig_path:
+            orig_name = Path(orig_path).name
+            for rdir in raw_dirs:
+                candidates.append(rdir / orig_name)
+
+        for cand in candidates:
+            if os.path.exists(cand):
+                found_path = str(cand)
+                break
+
+        if found_path:
+            df.at[idx, "image_path"] = found_path
+            remapped_count += 1
+            valid_indices.append(idx)
+        else:
+            print(f"  [WARN] Image {img_id} (path: '{orig_path}') could not be found after search in raw directories. Skipping.")
+
+    print(f"[*] Image path validation: {missing_count} paths were missing, {remapped_count} successfully remapped.")
+    if len(valid_indices) < len(df):
+        skipped = len(df) - len(valid_indices)
+        print(f"  [WARN] {skipped} image(s) could not be resolved and were skipped.")
+        df = df.loc[valid_indices].reset_index(drop=True)
+
+    return df
 
 
 # ── Step 1: Hair removal + inference (per-image, no DataLoader) ────────────────
@@ -399,6 +470,10 @@ def main() -> None:
         )
     df = pd.read_csv(ita_csv_path)
     print(f"[*] Loaded {len(df)} images with pre-computed ITA labels from {ita_csv_path}")
+
+    # ── Path validation & in-memory remapping (before hair removal or inference) ──
+    df = validate_and_remap_image_paths(df)
+
     print(f"    ITA group counts: { df['ita_group'].value_counts().to_dict() }")
 
     # ── SMOKE TEST fast path ──────────────────────────────────────────────────

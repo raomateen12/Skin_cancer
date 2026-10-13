@@ -46,8 +46,17 @@ from src.segmentation_inference import (
 
 logger = logging.getLogger("dermalens.counterfactual")
 
-DEFAULT_CLASSIFIER_CHECKPOINT = Path("checkpoints/best_efficientnet_b0.pth")
-CLASS_MAPPING_PATH = Path("configs/class_mapping.json")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_CLASSIFIER_CHECKPOINT = ROOT_DIR / "checkpoints" / "best_efficientnet_b0.pth"
+if not DEFAULT_CLASSIFIER_CHECKPOINT.exists():
+    DEFAULT_CLASSIFIER_CHECKPOINT = Path("checkpoints/best_efficientnet_b0.pth")
+
+CLASS_MAPPING_CANDIDATES = [
+    ROOT_DIR / "data" / "processed" / "class_mapping.json",
+    ROOT_DIR / "configs" / "class_mapping.json",
+    Path("data/processed/class_mapping.json"),
+    Path("configs/class_mapping.json"),
+]
 
 # Fallback mappings if config file is missing
 FALLBACK_CLASS_LABELS: dict[int, str] = {
@@ -84,13 +93,17 @@ def load_classifier(
 
     ckpt_path = Path(checkpoint_path)
     if not ckpt_path.exists():
-        # Check reweighted fallback
-        alt_path = Path("checkpoints/best_efficientnet_b0_reweighted.pth")
+        alt_path = ROOT_DIR / "checkpoints" / ckpt_path.name
         if alt_path.exists():
             ckpt_path = alt_path
         else:
-            logger.warning("Classifier checkpoint not found at %s", ckpt_path)
-            return None
+            # Check reweighted fallback
+            reweighted = ROOT_DIR / "checkpoints" / "best_efficientnet_b0_reweighted.pth"
+            if reweighted.exists():
+                ckpt_path = reweighted
+            else:
+                logger.warning("Classifier checkpoint not found at %s", ckpt_path)
+                return None
 
     try:
         model = get_efficientnet_b0(num_classes=7)
@@ -113,15 +126,17 @@ def _get_class_mappings() -> tuple[dict[int, str], dict[str, str]]:
     """Load index-to-code and code-to-name dictionaries."""
     idx_to_code = FALLBACK_CLASS_LABELS.copy()
     code_to_name = LABEL_NAMES.copy()
-    if CLASS_MAPPING_PATH.exists():
-        try:
-            data = json.loads(CLASS_MAPPING_PATH.read_text(encoding="utf-8"))
-            if "idx_to_class" in data:
-                idx_to_code = {int(k): v for k, v in data["idx_to_class"].items()}
-            if "label_names" in data:
-                code_to_name.update(data["label_names"])
-        except Exception:
-            pass
+    for p in CLASS_MAPPING_CANDIDATES:
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if "idx_to_class" in data:
+                    idx_to_code = {int(k): v for k, v in data["idx_to_class"].items()}
+                if "label_names" in data:
+                    code_to_name.update(data["label_names"])
+                break
+            except Exception:
+                pass
     return idx_to_code, code_to_name
 
 

@@ -355,19 +355,24 @@ def _validate_skin_image(image_bytes: bytes) -> dict:
         warnings = []
         if skin_ratio < 0.12:
             return {
+                "is_valid": True,
                 "valid": True,
                 "warning": (
                     "Image quality or skin-lesion relevance is uncertain. "
                     "For best results, please use a clear, close-up photo of the skin area or lesion."
                 ),
+                "warnings": [
+                    "Image quality or skin-lesion relevance is uncertain. "
+                    "For best results, please use a clear, close-up photo of the skin area or lesion."
+                ],
             }
 
-        logger.info("Validation PASS: skin_ratio=%.3f white=%.3f std=%.2f", skin_ratio, white_ratio, global_std)
-        return {"valid": True}
+        logger.info("Validation PASS: skin_ratio=%.3f", skin_ratio)
+        return {"is_valid": True, "valid": True, "warnings": []}
 
     except Exception as exc:
         logger.warning("Image validation exception (%s: %s) — allowing prediction", type(exc).__name__, exc)
-        return {"valid": True}
+        return {"is_valid": True, "valid": True, "warnings": []}
 
 
 def _generate_gradcam(image_bytes: bytes, predicted_idx: int) -> dict:
@@ -471,6 +476,17 @@ class AskRequest(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
+@app.get("/")
+async def root():
+    return {
+        "status": "online",
+        "service": "DermaLens AI API",
+        "version": "1.0.0",
+        "docs_url": "/docs",
+        "health_url": "/health",
+    }
+
+
 @app.get("/health")
 async def health():
     """Return full system status matching the documented health schema."""
@@ -566,7 +582,8 @@ async def predict(
 
         # ── Step 1: Image validation gate ────────────────────────────────────
         validation = _validate_skin_image(contents)
-        if not validation["is_valid"]:
+        is_valid = validation.get("is_valid", validation.get("valid", True))
+        if not is_valid:
             logger.info("Image rejected [%s]: %s",
                         validation.get("confidence", "?"),
                         validation.get("reason", "unknown"))

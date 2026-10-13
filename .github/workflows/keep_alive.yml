@@ -1,0 +1,23 @@
+name: Keep HuggingFace Backend Alive 24/7
+
+on:
+  schedule:
+    # Runs every 15 minutes to prevent Hugging Face free space from going to sleep
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping DermaLens AI HuggingFace Backend
+        run: |
+          echo "Pinging DermaLens API on Hugging Face..."
+          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" https://rmas12-dermalens-api.hf.space/health)
+          echo "Status Code: $HTTP_STATUS"
+          cat /tmp/response.json || true
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Backend is healthy and awake!"
+          else
+            echo "Waking up or starting backend container..."
+          fi

@@ -37,7 +37,10 @@ from src.unet_model import get_unet
 logger = logging.getLogger("dermalens.segmentation")
 
 # ── Defaults & Constants ──────────────────────────────────────────────────────
-DEFAULT_CHECKPOINT_PATH = Path("checkpoints/best_unet.pth")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_CHECKPOINT_PATH = ROOT_DIR / "checkpoints" / "best_unet.pth"
+if not DEFAULT_CHECKPOINT_PATH.exists():
+    DEFAULT_CHECKPOINT_PATH = Path("checkpoints/best_unet.pth")
 IMG_SIZE = 224
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
@@ -61,8 +64,12 @@ def get_segmentation_model(
 
     ckpt_path = Path(checkpoint_path)
     if not ckpt_path.exists():
-        logger.warning("U-Net checkpoint not found at: %s", ckpt_path)
-        return None
+        alt_path = ROOT_DIR / "checkpoints" / ckpt_path.name
+        if alt_path.exists():
+            ckpt_path = alt_path
+        else:
+            logger.warning("U-Net checkpoint not found at: %s (also checked %s)", ckpt_path, alt_path)
+            return None
 
     try:
         device = torch.device(device_str)
